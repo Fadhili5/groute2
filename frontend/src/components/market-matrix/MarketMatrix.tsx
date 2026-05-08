@@ -3,12 +3,9 @@
 import { useEffect, useRef } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridOptions } from "ag-grid-community";
-import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { cn } from "@/lib/utils";
 import type { Chain } from "@/types";
-
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 const CHAIN_DATA: Chain[] = [
   { id: "ethereum", name: "Ethereum", shortName: "ETH", liquidity: 842_000_000, spread: 0.02, gas: 12.4, bridgeFee: 0.05, slippage: 0.01, latency: 12, privacy: 85, mev: 92, eta: "12s", status: "healthy" },
