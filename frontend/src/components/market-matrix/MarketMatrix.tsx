@@ -2,33 +2,50 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridOptions, GridReadyEvent } from "ag-grid-community";
+import type { ColDef, GridOptions, GridReadyEvent, RowClickedEvent } from "ag-grid-community";
 import { cn } from "@/lib/utils";
 import type { Chain } from "@/types";
 
-const CHAIN_DATA: Chain[] = [
-  { id: "ethereum", name: "Ethereum", shortName: "ETH", liquidity: 842_000_000, spread: 0.02, gas: 12.4, bridgeFee: 0.05, slippage: 0.01, latency: 12, privacy: 85, mev: 92, eta: "12s", status: "healthy" },
-  { id: "arbitrum", name: "Arbitrum", shortName: "ARB", liquidity: 456_000_000, spread: 0.03, gas: 0.08, bridgeFee: 0.03, slippage: 0.02, latency: 3, privacy: 78, mev: 85, eta: "8s", status: "healthy" },
-  { id: "base", name: "Base", shortName: "BASE", liquidity: 234_000_000, spread: 0.04, gas: 0.06, bridgeFee: 0.04, slippage: 0.03, latency: 2, privacy: 72, mev: 80, eta: "6s", status: "healthy" },
-  { id: "solana", name: "Solana", shortName: "SOL", liquidity: 678_000_000, spread: 0.01, gas: 0.0002, bridgeFee: 0.02, slippage: 0.01, latency: 1, privacy: 45, mev: 60, eta: "4s", status: "healthy" },
-  { id: "avalanche", name: "Avalanche", shortName: "AVAX", liquidity: 189_000_000, spread: 0.05, gas: 0.15, bridgeFee: 0.06, slippage: 0.04, latency: 5, privacy: 70, mev: 75, eta: "10s", status: "degraded" },
-  { id: "bnb", name: "BNB Chain", shortName: "BNB", liquidity: 312_000_000, spread: 0.03, gas: 0.04, bridgeFee: 0.04, slippage: 0.02, latency: 4, privacy: 55, mev: 65, eta: "7s", status: "healthy" },
-];
-
 export function MarketMatrix() {
   const gridRef = useRef<AgGridReact>(null);
+  const [rowData, setRowData] = useState<Chain[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const res = await fetch("/api/market/chains");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setRowData(json.chains ?? []);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const onGridReady = useCallback((params: GridReadyEvent) => {
     try {
       params.api.sizeColumnsToFit();
     } catch {
       setError("Failed to initialize grid");
+    }
+  }, []);
+
+  const onRowClicked = useCallback((event: RowClickedEvent) => {
+    const chain = event.data as Chain;
+    if (chain?.id) {
+      window.dispatchEvent(new CustomEvent("chain-select", { detail: chain }));
     }
   }, []);
 
@@ -137,23 +154,6 @@ export function MarketMatrix() {
     reactiveCustomComponents: true,
   };
 
-  if (error) {
-    return (
-      <div className="panel h-full flex flex-col">
-        <div className="panel-header flex-shrink-0">
-          <span className="panel-title">Market Matrix</span>
-          <span className="panel-badge bg-matrix-red/10 text-matrix-red text-2xs">Error</span>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-2xs text-matrix-red font-mono mb-1">Grid initialization failed</div>
-            <button onClick={() => setError(null)} className="btn text-2xs">Retry</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!mounted) {
     return (
       <div className="panel h-full flex flex-col">
@@ -167,19 +167,43 @@ export function MarketMatrix() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="panel h-full flex flex-col">
+        <div className="panel-header flex-shrink-0">
+          <span className="panel-title">Market Matrix</span>
+          <span className="panel-badge bg-matrix-red/10 text-matrix-red text-2xs">Error</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xs text-matrix-red font-mono mb-1">{error}</div>
+            <button onClick={fetchData} className="btn text-2xs">Retry</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header flex-shrink-0">
         <span className="panel-title">Market Matrix</span>
-        <span className="panel-badge bg-matrix-green/10 text-matrix-green text-2xs">Live</span>
+        <div className="flex items-center gap-1">
+          {loading && <span className="text-2xs text-surface-600 font-mono">Loading...</span>}
+          {!loading && <span className="panel-badge bg-matrix-green/10 text-matrix-green text-2xs">{rowData.length} chains</span>}
+          <button onClick={fetchData} className="text-surface-600 hover:text-surface-400">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+          </button>
+        </div>
       </div>
       <div className="flex-1 ag-theme-ghost min-h-0">
         <AgGridReact
           ref={gridRef}
-          rowData={CHAIN_DATA}
+          rowData={rowData}
           columnDefs={colDefs}
           gridOptions={gridOptions}
           onGridReady={onGridReady}
+          onRowClicked={onRowClicked}
           domLayout="normal"
         />
       </div>
