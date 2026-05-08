@@ -52,8 +52,8 @@ export function MarketMatrix() {
     },
     {
       field: "liquidity",
-      headerName: "Liquidity",
-      width: 85,
+      headerName: "Depth",
+      width: 90,
       valueFormatter: (p) => {
         if (p?.value == null) return "$0";
         if (p.value >= 1e9) return `$${(p.value / 1e9).toFixed(1)}B`;
@@ -65,7 +65,7 @@ export function MarketMatrix() {
     {
       field: "spread",
       headerName: "Spread",
-      width: 65,
+      width: 70,
       valueFormatter: (p) => p?.value != null ? `${Number(p.value).toFixed(2)}%` : "-",
       cellStyle: (p) => p?.value != null && p.value <= 0.03 ? { color: "#10b981" } : { color: "#f59e0b" },
     },
@@ -129,10 +129,9 @@ export function MarketMatrix() {
   const gridOptions: GridOptions = {
     suppressMovableColumns: true,
     suppressCellFocus: true,
-    headerHeight: 26,
-    rowHeight: 26,
+    headerHeight: 24,
+    rowHeight: 24,
     animateRows: false,
-    suppressHorizontalScroll: true,
     enableCellTextSelection: true,
     ensureDomOrder: true,
     reactiveCustomComponents: true,
