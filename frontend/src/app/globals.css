@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    @apply border-surface-800;
+  }
+
+  body {
+    @apply bg-matrix-bg text-surface-300 font-sans antialiased;
+    overflow: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-matrix-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-800 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-surface-700;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-matrix-card border border-matrix-border rounded-sm overflow-hidden;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-3 py-2 border-b border-matrix-border bg-matrix-bg/50;
+  }
+
+  .panel-title {
+    @apply text-xs font-semibold text-surface-400 uppercase tracking-wider;
+  }
+
+  .panel-badge {
+    @apply text-2xs px-1.5 py-0.5 rounded font-mono font-medium;
+  }
+
+  .kpi-value {
+    @apply text-sm font-mono font-semibold text-surface-200;
+  }
+
+  .kpi-label {
+    @apply text-2xs text-surface-500 uppercase tracking-wider;
+  }
+
+  .status-dot {
+    @apply w-1.5 h-1.5 rounded-full inline-block;
+  }
+
+  .status-dot--online {
+    @apply bg-matrix-green;
+  }
+
+  .status-dot--degraded {
+    @apply bg-matrix-yellow;
+  }
+
+  .status-dot--offline {
+    @apply bg-matrix-red;
+  }
+
+  .btn {
+    @apply px-3 py-1.5 text-xs font-medium rounded-sm transition-all duration-150
+           border border-surface-700 bg-surface-800 hover:bg-surface-700
+           text-surface-300 hover:text-surface-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-ghost-700 border-ghost-600 text-white hover:bg-ghost-600;
+  }
+
+  .btn-success {
+    @apply btn bg-matrix-green/20 border-matrix-green/40 text-matrix-green hover:bg-matrix-green/30;
+  }
+
+  .btn-danger {
+    @apply btn bg-matrix-red/20 border-matrix-red/40 text-matrix-red hover:bg-matrix-red/30;
+  }
+
+  .input {
+    @apply bg-matrix-bg border border-surface-700 rounded-sm px-2.5 py-1.5 text-xs
+           text-surface-200 placeholder-surface-600
+           focus:outline-none focus:border-ghost-600 focus:ring-1 focus:ring-ghost-600/30
+           font-mono;
+  }
+
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  .table-cell {
+    @apply text-xs font-mono text-surface-300;
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 15px -5px rgba(34, 211, 238, 0.15);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 15px -5px rgba(16, 185, 129, 0.15);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 15px -5px rgba(139, 92, 246, 0.15);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* AG Grid overrides */
+.ag-theme-ghost {
+  --ag-background-color: transparent !important;
+  --ag-header-background-color: rgba(17, 24, 39, 0.8) !important;
+  --ag-odd-row-background-color: rgba(17, 24, 39, 0.3) !important;
+  --ag-even-row-background-color: transparent !important;
+  --ag-border-color: #1e293b !important;
+  --ag-font-family: 'JetBrains Mono', monospace !important;
+  --ag-font-size: 11px !important;
+  --ag-header-font-size: 10px !important;
+  --ag-header-font-weight: 600 !important;
+  --ag-header-foreground-color: #64748b !important;
+  --ag-foreground-color: #cbd5e1 !important;
+  --ag-secondary-foreground-color: #64748b !important;
+  --ag-borders: none !important;
+  --ag-cell-horizontal-padding: 8px !important;
+  --ag-cell-vertical-padding: 4px !important;
+  --ag-row-height: 28px !important;
+  --ag-header-height: 28px !important;
+  --ag-selected-row-background-color: rgba(59, 91, 219, 0.15) !important;
+  --ag-hover-color: rgba(59, 91, 219, 0.08) !important;
+}
+
+/* xterm overrides */
+.xterm {
+  height: 100%;
+  padding: 4px;
+}
+
+.xterm-viewport {
+  scrollbar-width: thin !important;
+}
+
+/* Recharts overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #1e293b !important;
+  stroke-dasharray: 3 3;
+}
+
+.recharts-text {
+  fill: #64748b !important;
+  font-size: 10px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
