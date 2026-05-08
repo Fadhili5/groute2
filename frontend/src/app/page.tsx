@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { StatusStrip } from "@/components/layout/StatusStrip";
@@ -23,33 +24,51 @@ export default function Home() {
       <main className="fixed top-header left-sidebar right-0 bottom-status overflow-hidden p-2">
         <div className="grid grid-cols-12 gap-2 h-full">
           <div className="col-span-4">
-            <MarketMatrix />
+            <ErrorBoundary name="Market Matrix">
+              <MarketMatrix />
+            </ErrorBoundary>
           </div>
           <div className="col-span-5">
-            <RouteVisualizer />
+            <ErrorBoundary name="Route Visualizer">
+              <RouteVisualizer />
+            </ErrorBoundary>
           </div>
           <div className="col-span-3">
-            <AiSolver />
+            <ErrorBoundary name="AI Solver">
+              <AiSolver />
+            </ErrorBoundary>
           </div>
 
           <div className="col-span-4">
-            <ExecutionBlotter />
+            <ErrorBoundary name="Execution Blotter">
+              <ExecutionBlotter />
+            </ErrorBoundary>
           </div>
           <div className="col-span-5">
-            <LiquidityHeatmap />
+            <ErrorBoundary name="Liquidity Heatmap">
+              <LiquidityHeatmap />
+            </ErrorBoundary>
           </div>
           <div className="col-span-3">
-            <SettlementInspector />
+            <ErrorBoundary name="Settlement Inspector">
+              <SettlementInspector />
+            </ErrorBoundary>
           </div>
 
           <div className="col-span-4">
-            <CommandTerminal />
+            <ErrorBoundary name="Command Terminal">
+              <CommandTerminal />
+            </ErrorBoundary>
           </div>
           <div className="col-span-5">
-            <AlertsFeed />
+            <ErrorBoundary name="Alerts Feed">
+              <AlertsFeed />
+            </ErrorBoundary>
           </div>
           <div className="col-span-3">
-            <Watchlist />
+            <ErrorBoundary name="Watchlist">
+              <Watchlist />
+            </ErrorBoundary>
           </div>
         </div>
       </main>

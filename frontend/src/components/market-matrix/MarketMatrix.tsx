@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridOptions } from "ag-grid-community";
-import { useTerminalStore } from "@/stores/terminal-store";
+import type { ColDef, GridOptions, GridReadyEvent } from "ag-grid-community";
 import { cn } from "@/lib/utils";
 import type { Chain } from "@/types";
 
@@ -17,101 +16,157 @@ const CHAIN_DATA: Chain[] = [
 ];
 
 export function MarketMatrix() {
-  const { chains, setChains } = useTerminalStore();
   const gridRef = useRef<AgGridReact>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setChains(CHAIN_DATA);
-  }, [setChains]);
+    setMounted(true);
+  }, []);
+
+  const onGridReady = useCallback((params: GridReadyEvent) => {
+    try {
+      params.api.sizeColumnsToFit();
+    } catch {
+      setError("Failed to initialize grid");
+    }
+  }, []);
 
   const colDefs: ColDef[] = [
     {
       field: "shortName",
       headerName: "Chain",
-      width: 50,
-      cellRenderer: (params: any) => (
-        <div className="flex items-center gap-1.5 h-full">
-          <span className={cn(
-            "w-1.5 h-1.5 rounded-full",
-            params.data.status === "healthy" ? "bg-matrix-green" : "bg-matrix-yellow"
-          )} />
-          <span className="font-semibold text-surface-200">{params.value}</span>
-        </div>
-      ),
+      width: 55,
+      cellRenderer: (params: any) => {
+        if (!params?.data) return null;
+        return (
+          <div className="flex items-center gap-1.5 h-full">
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              params.data.status === "healthy" ? "bg-matrix-green" : params.data.status === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red"
+            )} />
+            <span className="font-semibold text-surface-200">{params.value ?? ""}</span>
+          </div>
+        );
+      },
     },
     {
       field: "liquidity",
       headerName: "Liquidity",
       width: 85,
-      valueFormatter: (p: any) => {
+      valueFormatter: (p) => {
+        if (p?.value == null) return "$0";
         if (p.value >= 1e9) return `$${(p.value / 1e9).toFixed(1)}B`;
         if (p.value >= 1e6) return `$${(p.value / 1e6).toFixed(0)}M`;
-        return `$${(p.value / 1e3).toFixed(0)}K`;
+        return `$${Math.round(p.value / 1e3)}K`;
       },
       cellStyle: { color: "#22d3ee" },
     },
     {
       field: "spread",
       headerName: "Spread",
-      width: 60,
-      valueFormatter: (p: any) => `${p.value.toFixed(2)}%`,
-      cellStyle: (p: any) => p.value <= 0.03 ? { color: "#10b981" } : { color: "#f59e0b" },
+      width: 65,
+      valueFormatter: (p) => p?.value != null ? `${Number(p.value).toFixed(2)}%` : "-",
+      cellStyle: (p) => p?.value != null && p.value <= 0.03 ? { color: "#10b981" } : { color: "#f59e0b" },
     },
     {
       field: "gas",
       headerName: "Gas",
-      width: 65,
-      valueFormatter: (p: any) => p.value < 1 ? `${p.value} gwei` : `${p.value.toFixed(1)} gwei`,
-      cellStyle: (p: any) => p.value < 1 ? { color: "#10b981" } : { color: "#ef4444" },
+      width: 70,
+      valueFormatter: (p) => {
+        if (p?.value == null) return "-";
+        return p.value < 1 ? `${p.value} gwei` : `${Number(p.value).toFixed(1)} gwei`;
+      },
+      cellStyle: (p) => p?.value != null && p.value < 1 ? { color: "#10b981" } : { color: "#ef4444" },
     },
     {
       field: "bridgeFee",
       headerName: "Bridge",
-      width: 60,
-      valueFormatter: (p: any) => `${p.value.toFixed(2)}%`,
+      width: 65,
+      valueFormatter: (p) => p?.value != null ? `${Number(p.value).toFixed(2)}%` : "-",
     },
     {
       field: "slippage",
-      headerName: "Slippage",
-      width: 65,
-      valueFormatter: (p: any) => `${p.value.toFixed(2)}%`,
-      cellStyle: (p: any) => p.value <= 0.02 ? { color: "#10b981" } : { color: "#f59e0b" },
+      headerName: "Slip",
+      width: 55,
+      valueFormatter: (p) => p?.value != null ? `${Number(p.value).toFixed(2)}%` : "-",
+      cellStyle: (p) => p?.value != null && p.value <= 0.02 ? { color: "#10b981" } : { color: "#f59e0b" },
     },
     {
       field: "latency",
-      headerName: "Latency",
-      width: 60,
-      valueFormatter: (p: any) => `${p.value}s`,
-      cellStyle: (p: any) => p.value <= 5 ? { color: "#10b981" } : p.value <= 10 ? { color: "#f59e0b" } : { color: "#ef4444" },
+      headerName: "Lat",
+      width: 50,
+      valueFormatter: (p) => p?.value != null ? `${p.value}s` : "-",
+      cellStyle: (p) => {
+        if (p?.value == null) return {};
+        if (p.value <= 5) return { color: "#10b981" };
+        if (p.value <= 10) return { color: "#f59e0b" };
+        return { color: "#ef4444" };
+      },
     },
     {
       field: "privacy",
-      headerName: "Privacy",
-      width: 60,
-      valueFormatter: (p: any) => `${p.value}`,
-      cellStyle: (p: any) => p.value >= 70 ? { color: "#22d3ee" } : { color: "#f59e0b" },
+      headerName: "Priv",
+      width: 55,
+      valueFormatter: (p) => p?.value != null ? `${p.value}` : "-",
+      cellStyle: (p) => p?.value != null && p.value >= 70 ? { color: "#22d3ee" } : { color: "#f59e0b" },
     },
     {
       field: "mev",
       headerName: "MEV",
       width: 55,
-      valueFormatter: (p: any) => `${p.value}`,
-      cellStyle: (p: any) => p.value >= 80 ? { color: "#10b981" } : { color: "#f59e0b" },
+      valueFormatter: (p) => p?.value != null ? `${p.value}` : "-",
+      cellStyle: (p) => p?.value != null && p.value >= 80 ? { color: "#10b981" } : { color: "#f59e0b" },
     },
     {
       field: "eta",
       headerName: "ETA",
       width: 55,
+      valueFormatter: (p) => p?.value ?? "-",
     },
   ];
 
   const gridOptions: GridOptions = {
     suppressMovableColumns: true,
     suppressCellFocus: true,
-    headerHeight: 28,
-    rowHeight: 28,
-    rowClass: "ag-theme-ghost",
+    headerHeight: 26,
+    rowHeight: 26,
+    animateRows: false,
+    suppressHorizontalScroll: true,
+    enableCellTextSelection: true,
+    ensureDomOrder: true,
+    reactiveCustomComponents: true,
   };
+
+  if (error) {
+    return (
+      <div className="panel h-full flex flex-col">
+        <div className="panel-header flex-shrink-0">
+          <span className="panel-title">Market Matrix</span>
+          <span className="panel-badge bg-matrix-red/10 text-matrix-red text-2xs">Error</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xs text-matrix-red font-mono mb-1">Grid initialization failed</div>
+            <button onClick={() => setError(null)} className="btn text-2xs">Retry</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!mounted) {
+    return (
+      <div className="panel h-full flex flex-col">
+        <div className="panel-header flex-shrink-0">
+          <span className="panel-title">Market Matrix</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-2xs text-surface-600 font-mono">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="panel h-full flex flex-col">
@@ -119,21 +174,16 @@ export function MarketMatrix() {
         <span className="panel-title">Market Matrix</span>
         <span className="panel-badge bg-matrix-green/10 text-matrix-green text-2xs">Live</span>
       </div>
-      <div className="flex-1 ag-theme-ghost">
+      <div className="flex-1 ag-theme-ghost min-h-0">
         <AgGridReact
           ref={gridRef}
           rowData={CHAIN_DATA}
           columnDefs={colDefs}
           gridOptions={gridOptions}
-          domLayout="autoHeight"
-          suppressHorizontalScroll={false}
+          onGridReady={onGridReady}
+          domLayout="normal"
         />
       </div>
-      <style jsx global>{`
-        .ag-theme-ghost .ag-root-wrapper {
-          border: none !important;
-        }
-      `}</style>
     </div>
   );
 }

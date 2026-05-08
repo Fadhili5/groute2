@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ok, serverError } from "@/lib/api-utils";
 
 const CHAINS = [
   { id: "ethereum", name: "Ethereum", shortName: "ETH", chainId: 1, liquidity: 842_000_000, spread: 0.02, gas: 12.4, bridgeFee: 0.05, slippage: 0.01, latency: 12, privacy: 85, mev: 92, eta: "12s", status: "healthy" },
@@ -10,5 +10,9 @@ const CHAINS = [
 ];
 
 export async function GET() {
-  return NextResponse.json({ chains: CHAINS });
+  try {
+    return ok({ chains: CHAINS });
+  } catch (error) {
+    return serverError(error);
+  }
 }
