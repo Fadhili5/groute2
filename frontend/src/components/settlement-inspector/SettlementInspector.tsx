@@ -1,20 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn, shortenAddress, shortenTxHash, formatTimestamp } from "@/lib/utils";
 import { FileCheck, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
 import type { SettlementData } from "@/types";
 
-const SAMPLE: SettlementData = {
-  txHash: "0x7f3c8a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
-  routeId: "0x9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
-  proofHash: "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
-  state: "confirmed",
-  fees: 12.45,
-  relayer: "0x8f3c7a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
-  confirmations: 32,
-  timestamp: Date.now() - 30000,
-};
+function createSample(): SettlementData {
+  const now = Date.now();
+  return {
+    txHash: "0x7f3c8a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
+    routeId: "0x9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
+    proofHash: "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+    state: "confirmed",
+    fees: 12.45,
+    relayer: "0x8f3c7a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
+    confirmations: 32,
+    timestamp: now - 30000,
+  };
+}
 
 const STATE_ICONS: Record<string, any> = {
   pending: Clock,
@@ -31,9 +34,12 @@ const STATE_COLORS: Record<string, string> = {
 };
 
 export function SettlementInspector() {
+  const [mounted, setMounted] = useState(false);
   const [txInput, setTxInput] = useState("");
-  const [settlement] = useState<SettlementData>(SAMPLE);
+  const [settlement] = useState<SettlementData>(() => createSample());
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleInspect = () => {
     if (!txInput.trim()) return;
@@ -42,6 +48,7 @@ export function SettlementInspector() {
   };
 
   const StateIcon = STATE_ICONS[settlement.state] || Clock;
+  const ts = mounted ? formatTimestamp(settlement.timestamp) : "00:00:00";
 
   return (
     <div className="panel h-full flex flex-col">
@@ -86,7 +93,7 @@ export function SettlementInspector() {
         <Row label="Fees" value={`${settlement.fees} USDC`} mono />
         <Row label="Relayer" value={shortenAddress(settlement.relayer)} mono />
         <Row label="Confirmations" value={`${settlement.confirmations}/64`} mono />
-        <Row label="Timestamp" value={formatTimestamp(settlement.timestamp)} mono />
+        <Row label="Timestamp" value={ts} mono />
 
         <div className="pt-2 border-t border-surface-800">
           <button className="w-full btn text-2xs flex items-center justify-center gap-1">

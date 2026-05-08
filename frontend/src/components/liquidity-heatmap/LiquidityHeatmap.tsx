@@ -49,7 +49,7 @@ export function LiquidityHeatmap() {
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header flex-shrink-0">
-        <span className="panel-title">Liquidity Intelligence</span>
+        <span className="panel-title">Liquidity Heatmap</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setView("chart")}

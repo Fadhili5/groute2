@@ -23,19 +23,22 @@ const ALERT_TYPES = {
   gas_spike: { icon: Fuel, label: "Gas Spike", color: "text-matrix-yellow" },
 };
 
-const INITIAL_ALERTS: Alert[] = [
-  { id: "a1", type: "route_success", severity: "info", message: "Route 0x7f3c: 50,000 USDC ARB → ETH completed in 12.4s", timestamp: Date.now() - 5000, read: false },
-  { id: "a2", type: "mev_event", severity: "warning", message: "MEV bot detected on Ethereum mempool - protection engaged", timestamp: Date.now() - 15000, read: false, chain: "ethereum" },
-  { id: "a3", type: "bridge_outage", severity: "critical", message: "Wormhole: 4 relayers delayed on Avalanche path", timestamp: Date.now() - 30000, read: false, chain: "avalanche" },
-  { id: "a4", type: "gas_spike", severity: "warning", message: "Base gas spike: 3.2 gwei (+240% in 5 min)", timestamp: Date.now() - 60000, read: false, chain: "base" },
-  { id: "a5", type: "liquidity_spike", severity: "info", message: "Uniswap V3 ETH/USDC pool: +$42M depth added", timestamp: Date.now() - 120000, read: true, chain: "ethereum" },
-  { id: "a6", type: "route_success", severity: "info", message: "Route 0x9a1b: 100,000 USDT BASE → SOL completed", timestamp: Date.now() - 180000, read: true },
-  { id: "a7", type: "relayer_failure", severity: "warning", message: "Relayer node 0x8f3c missed 3 consecutive attestations", timestamp: Date.now() - 240000, read: true },
-];
+function createInitialAlerts(): Alert[] {
+  const now = Date.now();
+  return [
+    { id: "a1", type: "route_success", severity: "info", message: "Route 0x7f3c: 50,000 USDC ARB → ETH completed in 12.4s", timestamp: now - 5000, read: false },
+    { id: "a2", type: "mev_event", severity: "warning", message: "MEV bot detected on Ethereum mempool - protection engaged", timestamp: now - 15000, read: false, chain: "ethereum" },
+    { id: "a3", type: "bridge_outage", severity: "critical", message: "Wormhole: 4 relayers delayed on Avalanche path", timestamp: now - 30000, read: false, chain: "avalanche" },
+    { id: "a4", type: "gas_spike", severity: "warning", message: "Base gas spike: 3.2 gwei (+240% in 5 min)", timestamp: now - 60000, read: false, chain: "base" },
+    { id: "a5", type: "liquidity_spike", severity: "info", message: "Uniswap V3 ETH/USDC pool: +$42M depth added", timestamp: now - 120000, read: true, chain: "ethereum" },
+    { id: "a6", type: "route_success", severity: "info", message: "Route 0x9a1b: 100,000 USDT BASE → SOL completed", timestamp: now - 180000, read: true },
+    { id: "a7", type: "relayer_failure", severity: "warning", message: "Relayer node 0x8f3c missed 3 consecutive attestations", timestamp: now - 240000, read: true },
+  ];
+}
 
 export function AlertsFeed() {
   const { alerts, addAlert, markAlertRead } = useTerminalStore();
-  const [items, setItems] = useState<Alert[]>(INITIAL_ALERTS);
+  const [items, setItems] = useState<Alert[]>(() => createInitialAlerts());
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => {
