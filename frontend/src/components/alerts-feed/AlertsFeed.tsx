@@ -37,9 +37,12 @@ function createInitialAlerts(): Alert[] {
 }
 
 export function AlertsFeed() {
+  const [mounted, setMounted] = useState(false);
   const { alerts, addAlert, markAlertRead } = useTerminalStore();
   const [items, setItems] = useState<Alert[]>(() => createInitialAlerts());
   const [filter, setFilter] = useState<string | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -124,7 +127,7 @@ export function AlertsFeed() {
                 <p className="text-2xs text-surface-400 truncate">{alert.message}</p>
               </div>
               <span className="text-2xs text-surface-600 font-mono flex-shrink-0">
-                {formatTimestamp(alert.timestamp)}
+                {mounted ? formatTimestamp(alert.timestamp) : "00:00:00"}
               </span>
             </div>
           );
