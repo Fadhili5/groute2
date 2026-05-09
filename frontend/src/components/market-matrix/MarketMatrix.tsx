@@ -115,7 +115,7 @@ export function MarketMatrix() {
       width: 50,
       valueFormatter: (p) => p?.value != null ? `${p.value}s` : "-",
       cellStyle: (p) => {
-        if (p?.value == null) return {};
+        if (p?.value == null) return { color: "#64748b" };
         if (p.value <= 5) return { color: "#10b981" };
         if (p.value <= 10) return { color: "#f59e0b" };
         return { color: "#ef4444" };
@@ -146,6 +146,7 @@ export function MarketMatrix() {
   const gridOptions: GridOptions = {
     suppressMovableColumns: true,
     suppressCellFocus: true,
+    suppressContextMenu: true,
     headerHeight: 24,
     rowHeight: 24,
     animateRows: false,
