@@ -67,6 +67,7 @@ const config: Config = {
       },
       spacing: {
         sidebar: "240px",
+        "sidebar-collapsed": "56px",
         header: "56px",
         status: "28px",
       },
