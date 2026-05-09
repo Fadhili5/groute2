@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { useTerminalStore } from "@/stores/terminal-store";
+import { useSolverStore } from "@/stores";
 import { Terminal } from "lucide-react";
 
 const WELCOME = `\x1b[36mGhostRoute Terminal v1.0.0\x1b[0m
@@ -30,7 +30,7 @@ Uptime:       3d 14h 22m`,
 };
 
 export function CommandTerminal() {
-  const { terminalOutput, addTerminalOutput, clearTerminal } = useTerminalStore();
+  const { terminalOutput, addTerminalOutput, clearTerminal } = useSolverStore();
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([WELCOME]);
   const [historyIdx, setHistoryIdx] = useState(-1);

@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @layer base {
   * {
@@ -150,13 +150,27 @@
   --ag-foreground-color: #cbd5e1 !important;
   --ag-secondary-foreground-color: #64748b !important;
   --ag-borders: none !important;
-  --ag-cell-horizontal-padding: 8px !important;
-  --ag-cell-vertical-padding: 4px !important;
-  --ag-row-height: 28px !important;
-  --ag-header-height: 28px !important;
+  --ag-cell-horizontal-padding: 10px !important;
+  --ag-cell-vertical-padding: 6px !important;
+  --ag-row-height: 36px !important;
+  --ag-header-height: 34px !important;
   --ag-selected-row-background-color: rgba(59, 91, 219, 0.15) !important;
   --ag-hover-color: rgba(59, 91, 219, 0.08) !important;
+  --ag-row-border-color: rgba(30, 41, 59, 0.5) !important;
+  --ag-row-border-width: 0 0 1px 0 !important;
+  --ag-range-selection-border-color: transparent !important;
 }
+.ag-theme-ghost .ag-header-row { border-bottom: 1px solid #1e293b !important; }
+.ag-theme-ghost .ag-row { border-bottom: 1px solid rgba(30, 41, 59, 0.4) !important; }
+.ag-theme-ghost .ag-row:hover { background-color: rgba(59, 91, 219, 0.06) !important; }
+.ag-theme-ghost .ag-cell { line-height: 36px !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.ag-theme-ghost .ag-floating-filter { background-color: rgba(17, 24, 39, 0.6) !important; border-bottom: 1px solid #1e293b !important; }
+.ag-theme-ghost .ag-floating-filter-input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #1e293b !important; color: #94a3b8 !important; font-size: 10px !important; font-family: 'JetBrains Mono', monospace !important; height: 24px !important; padding: 0 6px !important; }
+.ag-theme-ghost .ag-floating-filter-input:focus { border-color: #22d3ee !important; outline: none !important; }
+.ag-theme-ghost .ag-header-cell { font-size: 10px !important; font-weight: 600 !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; }
+.ag-theme-ghost .ag-header-cell-text { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.ag-theme-ghost .ag-body-viewport { overflow-x: auto !important; overflow-y: auto !important; }
+.ag-theme-ghost .ag-center-cols-container { min-width: 100% !important; }
 
 /* xterm overrides */
 .xterm {

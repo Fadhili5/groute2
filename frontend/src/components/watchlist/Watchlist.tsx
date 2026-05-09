@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useTerminalStore } from "@/stores/terminal-store";
+import { useWalletStore } from "@/stores";
 import { TrendingUp, TrendingDown, Eye, EyeOff } from "lucide-react";
 import type { WatchlistItem } from "@/types";
 
@@ -16,7 +16,7 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
 ];
 
 export function Watchlist() {
-  const { watchlist, setWatchlist } = useTerminalStore();
+  const { watchlist, setWatchlist } = useWalletStore();
   const items = watchlist.length > 0 ? watchlist : DEFAULT_WATCHLIST;
 
   return (

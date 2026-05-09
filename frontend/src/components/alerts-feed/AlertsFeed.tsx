@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { cn, formatTimestamp } from "@/lib/utils";
-import { useTerminalStore } from "@/stores/terminal-store";
+import { useAlertStore } from "@/stores";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -38,7 +38,7 @@ function createInitialAlerts(): Alert[] {
 
 export function AlertsFeed() {
   const [mounted, setMounted] = useState(false);
-  const { alerts, addAlert, markAlertRead } = useTerminalStore();
+  const { alerts, addAlert, markAlertRead } = useAlertStore();
   const [items, setItems] = useState<Alert[]>(() => createInitialAlerts());
   const [filter, setFilter] = useState<string | null>(null);
 

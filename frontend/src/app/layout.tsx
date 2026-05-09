@@ -6,14 +6,10 @@ export const metadata: Metadata = {
   description: "Private Cross-Chain Liquidity Execution Terminal",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-matrix-bg text-surface-300">{children}</body>
+      <body className="bg-matrix-bg text-surface-300 font-sans antialiased overflow-hidden">{children}</body>
     </html>
   );
 }

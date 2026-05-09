@@ -1,11 +1,11 @@
 "use client";
 
 import { Search, Bell, Wallet, ChevronDown } from "lucide-react";
-import { useTerminalStore } from "@/stores/terminal-store";
+import { useWalletStore } from "@/stores";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 export function Header() {
-  const { kpis } = useTerminalStore();
+  const { kpis } = useWalletStore();
 
   return (
     <header className="fixed top-0 left-sidebar right-0 h-header bg-matrix-card border-b border-matrix-border z-40 flex items-center px-4 gap-4">
