@@ -17,10 +17,10 @@ export function StatusStrip() {
   const [items] = useState<TickerItem[]>(DEFAULT_TICKER);
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 h-status bg-matrix-card border-t border-matrix-border z-50 flex items-center overflow-hidden">
-      <div className="flex items-center gap-2 px-3 border-r border-matrix-border h-full flex-shrink-0">
-        <span className="text-2xs font-mono text-surface-600 uppercase tracking-wider">Live</span>
-        <span className="w-1.5 h-1.5 rounded-full bg-matrix-green animate-pulse-slow" />
+    <footer className="fixed bottom-0 left-0 right-0 h-status bg-surface-900 border-t border-surface-800 z-50 flex items-center overflow-hidden">
+      <div className="flex items-center gap-2 px-3 border-r border-surface-800 h-full flex-shrink-0">
+        <span className="text-2xs font-mono text-surface-600">LIVE</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-matrix-green" />
       </div>
       <div className="flex-1 overflow-hidden relative">
         <div className="flex items-center h-full ticker-track whitespace-nowrap animate-ticker">

@@ -14,10 +14,21 @@ import { Watchlist } from "@/components/watchlist/Watchlist";
 import { TerminalShell } from "@/components/layout/TerminalShell";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
-const NAV_LABELS = ["Market", "Execution", "Routes", "Liquidity", "Settlement", "Terminal", "Alerts", "Watchlist"];
+const TABS = [
+  { id: "market", label: "MARKET", module: "MarketMatrix" },
+  { id: "execution", label: "EXECUTION", module: "ExecutionBlotter" },
+  { id: "routes", label: "ROUTES", module: "RouteVisualizer" },
+  { id: "liquidity", label: "LIQUIDITY", module: "LiquidityHeatmap" },
+  { id: "settlement", label: "SETTLEMENT", module: "SettlementInspector" },
+  { id: "terminal", label: "TERMINAL", module: "CommandTerminal" },
+  { id: "alerts", label: "ALERTS", module: "AlertsFeed" },
+  { id: "watchlist", label: "WATCHLIST", module: "Watchlist" },
+];
+
+const SIDEBAR_MODULES = ["AiSolver"];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState("market");
   const [isMobile, setIsMobile] = useState(false);
   useWebSocket();
 
@@ -32,39 +43,28 @@ export default function Home() {
     return (
       <div className="h-screen bg-matrix-bg flex flex-col">
         <div className="flex-shrink-0 h-[52px] bg-matrix-card border-b border-matrix-border flex items-center px-3 z-40">
-          <div className="w-5 h-5 rounded-sm bg-gradient-to-br from-ghost-500 to-cyan-400 flex items-center justify-center flex-shrink-0">
-            <span className="text-[9px] font-bold text-white">G</span>
+          <div className="w-5 h-5 rounded bg-surface-800 flex items-center justify-center flex-shrink-0">
+            <span className="text-[9px] font-bold text-surface-400">G</span>
           </div>
           <span className="text-xs font-semibold text-surface-200 ml-2">GhostRoute</span>
-          <div className="flex items-center gap-3 ml-auto">
-            {NAV_LABELS.slice(0, 4).map((label, i) => (
-              <button
-                key={label}
-                onClick={() => setActiveTab(i)}
-                className={`w-7 h-7 rounded-sm flex items-center justify-center text-[10px] font-semibold transition-colors ${activeTab === i ? "bg-surface-800 text-surface-200" : "text-surface-500 hover:text-surface-400"}`}
-              >
-                {label[0]}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="flex-1 overflow-hidden">
-          {activeTab === 0 && <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>}
-          {activeTab === 1 && <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>}
-          {activeTab === 2 && <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>}
-          {activeTab === 3 && <ErrorBoundary name="Alerts Feed"><AlertsFeed /></ErrorBoundary>}
+          {activeTab === "market" && <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>}
+          {activeTab === "execution" && <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>}
+          {activeTab === "routes" && <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>}
+          {activeTab === "liquidity" && <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>}
         </div>
 
         <div className="flex-shrink-0 bg-matrix-card border-t border-matrix-border">
           <div className="flex justify-around">
-            {NAV_LABELS.map((label, i) => (
+            {TABS.map((tab) => (
               <button
-                key={label}
-                onClick={() => setActiveTab(i)}
-                className={`flex flex-col items-center gap-0.5 py-1.5 px-2 transition-colors ${activeTab === i ? "text-surface-200" : "text-surface-500"}`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-col items-center gap-0.5 py-1.5 px-2 transition-colors ${activeTab === tab.id ? "text-surface-200" : "text-surface-500"}`}
               >
-                <span className="text-[11px]">{label}</span>
+                <span className="text-[11px]">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -73,35 +73,56 @@ export default function Home() {
     );
   }
 
+  const renderModule = (module: string) => {
+    switch (module) {
+      case "MarketMatrix": return <MarketMatrix />;
+      case "RouteVisualizer": return <RouteVisualizer />;
+      case "ExecutionBlotter": return <ExecutionBlotter />;
+      case "LiquidityHeatmap": return <LiquidityHeatmap />;
+      case "SettlementInspector": return <SettlementInspector />;
+      case "CommandTerminal": return <CommandTerminal />;
+      case "AlertsFeed": return <AlertsFeed />;
+      case "Watchlist": return <Watchlist />;
+      default: return null;
+    }
+  };
+
   return (
     <TerminalShell>
-      <div className="grid grid-cols-12 gap-2 h-full" style={{ gridTemplateRows: "42fr 34fr 1fr" }}>
-        <div className="col-span-4 row-span-1 min-h-0">
-          <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>
+      <div className="flex h-full gap-4">
+        <div className="flex-1 flex flex-col min-w-0">
+          <nav className="flex gap-1 mb-4 px-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-xs font-medium transition-colors border-b-2 ${
+                  activeTab === tab.id
+                    ? "text-surface-200 border-matrix-green"
+                    : "text-surface-500 border-transparent hover:text-surface-400"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          
+          <div className="flex-1 min-h-0 panel">
+            <div className="h-full p-4">
+              <ErrorBoundary name={activeTab}>
+                {renderModule(TABS.find(t => t.id === activeTab)?.module || "MarketMatrix")}
+              </ErrorBoundary>
+            </div>
+          </div>
         </div>
-        <div className="col-span-5 row-span-1 min-h-0">
-          <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>
-        </div>
-        <div className="col-span-3 row-span-1 min-h-0">
-          <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
-        </div>
-        <div className="col-span-4 row-span-1 min-h-0">
-          <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>
-        </div>
-        <div className="col-span-5 row-span-1 min-h-0">
-          <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>
-        </div>
-        <div className="col-span-3 row-span-1 min-h-0">
-          <ErrorBoundary name="Settlement Inspector"><SettlementInspector /></ErrorBoundary>
-        </div>
-        <div className="col-span-4 row-span-1 min-h-0">
-          <ErrorBoundary name="Command Terminal"><CommandTerminal /></ErrorBoundary>
-        </div>
-        <div className="col-span-5 row-span-1 min-h-0">
-          <ErrorBoundary name="Alerts Feed"><AlertsFeed /></ErrorBoundary>
-        </div>
-        <div className="col-span-3 row-span-1 min-h-0">
-          <ErrorBoundary name="Watchlist"><Watchlist /></ErrorBoundary>
+
+        <div className="w-80 flex flex-col gap-4 flex-shrink-0">
+          <div className="panel p-4" style={{ flex: "0 0 auto" }}>
+            <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
+          </div>
+          <div className="panel p-4 flex-1 min-h-0">
+            <ErrorBoundary name="Watchlist"><Watchlist /></ErrorBoundary>
+          </div>
         </div>
       </div>
     </TerminalShell>

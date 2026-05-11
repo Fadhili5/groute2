@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Chain {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  shortName String
+  chainId   Int      @unique
+  rpcUrl    String?
+  status    String   @default("healthy")
+
+  routes         Route[]
+  liquidityPools LiquidityPool[]
+  settlements    Settlement[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Route {
+  id            String   @id @default(uuid())
+  name          String
+  sourceChainId String
+  destChainId   String
+  maxAmount     Float
+  minAmount     Float
+  avgLatency    Float    @default(0)
+  successRate   Float    @default(100)
+  totalVolume   Float    @default(0)
+  totalExecs    Int      @default(0)
+  status        String   @default("active")
+
+  sourceChain Chain  @relation("SourceChain", fields: [sourceChainId], references: [id])
+  destChain   Chain  @relation("DestChain", fields: [destChainId], references: [id])
+  bridges     String @default("[]")
+  dexes       String @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Intent {
+  id              String   @id @default(uuid())
+  userId          String
+  tokenIn         String
+  tokenOut        String
+  amountIn        Float
+  minAmountOut    Float
+  sourceChainId   String
+  destChainId     String
+  privacyLevel    String   @default("standard")
+  fragmented      Boolean  @default(false)
+  state           String   @default("created")
+
+  fragments IntentFragment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model IntentFragment {
+  id        String @id @default(uuid())
+  intentId  String
+  token     String
+  amount    Float
+  targetDex String
+  settled   Boolean @default(false)
+
+  intent Intent @relation(fields: [intentId], references: [id])
+}
+
+model Settlement {
+  id             String   @id @default(uuid())
+  txHash         String   @unique
+  routeId        String
+  proofHash      String
+  sourceChainId  String
+  destChainId    String
+  relayerAddress String
+  amount         Float
+  fee            Float
+  state          String   @default("pending")
+  confirmations  Int      @default(0)
+
+  sourceChain Chain @relation("SettlementSource", fields: [sourceChainId], references: [id])
+  destChain   Chain @relation("SettlementDest", fields: [destChainId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LiquidityPool {
+  id           String @id @default(uuid())
+  chainId      String
+  token        String
+  depth        Float
+  utilization  Float
+  apy          Float
+  volume24h    Float
+  fee          Float
+
+  chain Chain @relation(fields: [chainId], references: [id])
+}
+
+model Alert {
+  id        String   @id @default(uuid())
+  type      String
+  severity  String
+  message   String
+  chainId   String?
+  read      Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model WatchlistItem {
+  id      String @id @default(uuid())
+  symbol  String
+  name    String
+  price   Float
+  chainId String
+}
+
+model Relayer {
+  id              String   @id @default(uuid())
+  address         String   @unique
+  endpoint        String
+  stake           Float    @default(0)
+  totalRoutes     Int      @default(0)
+  successfulRoutes Int     @default(0)
+  failedRoutes    Int      @default(0)
+  status          String   @default("inactive")
+  lastHeartbeat   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

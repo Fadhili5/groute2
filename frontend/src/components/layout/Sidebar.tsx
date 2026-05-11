@@ -38,25 +38,25 @@ export function Sidebar() {
 
   return (
     <aside className={cn(
-      "fixed left-0 top-0 h-screen bg-matrix-card border-r border-matrix-border z-50 flex flex-col transition-all duration-200",
+      "fixed left-0 top-0 h-screen bg-surface-900 border-r border-surface-800 z-50 flex flex-col transition-all duration-200",
       sidebarCollapsed ? "w-sidebar-collapsed" : "w-sidebar"
     )}>
       <div className={cn("h-header flex items-center border-b border-matrix-border flex-shrink-0", sidebarCollapsed ? "justify-center px-0" : "px-4")}>
         {!sidebarCollapsed && (
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-ghost-500 to-cyan-400 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">G</span>
+            <div className="w-6 h-6 bg-surface-800 border border-surface-700 flex items-center justify-center">
+              <span className="text-[10px] font-medium text-surface-400">G</span>
             </div>
             <div>
-              <span className="text-sm font-semibold text-surface-200 tracking-tight">GhostRoute</span>
+              <span className="text-sm font-medium text-surface-200">GhostRoute</span>
               <span className="text-[10px] text-surface-500 block leading-none">Terminal</span>
             </div>
           </Link>
         )}
         {sidebarCollapsed && (
           <Link href="/">
-            <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-ghost-500 to-cyan-400 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">G</span>
+            <div className="w-6 h-6 bg-surface-800 border border-surface-700 flex items-center justify-center">
+              <span className="text-[10px] font-medium text-surface-400">G</span>
             </div>
           </Link>
         )}
@@ -69,12 +69,11 @@ export function Sidebar() {
             href={item.href}
             title={sidebarCollapsed ? item.label : undefined}
             className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-sm text-xs transition-all",
+              "flex items-center gap-2.5 px-3 py-2 text-xs transition-all",
               sidebarCollapsed && "justify-center px-1.5",
               isActive(item.href)
-                ? "text-surface-200 bg-surface-800/60 font-semibold"
-                : "text-surface-400 hover:text-surface-200 hover:bg-surface-800/50",
-              "font-medium tracking-wide"
+                ? "text-surface-200 bg-surface-800 font-medium"
+                : "text-surface-500 hover:text-surface-300"
             )}
           >
             <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -85,7 +84,7 @@ export function Sidebar() {
 
       <button
         onClick={toggleSidebar}
-        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-surface-800 border border-matrix-border flex items-center justify-center hover:bg-surface-700 transition-colors z-10"
+        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-surface-800 border border-surface-700 flex items-center justify-center hover:bg-surface-700 transition-colors z-10"
         title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {sidebarCollapsed
@@ -95,7 +94,7 @@ export function Sidebar() {
       </button>
 
       {!sidebarCollapsed && (
-        <div className="px-3 py-3 border-t border-matrix-border space-y-2 flex-shrink-0">
+        <div className="px-3 py-3 border-t border-surface-800 space-y-2 flex-shrink-0">
           <div className="text-2xs text-surface-500 uppercase tracking-widest font-semibold mb-2">System Health</div>
           <div className="space-y-1.5">
             <HealthRow label="Network" status={systemHealth.network === "connected" ? "online" : "degraded"} />
