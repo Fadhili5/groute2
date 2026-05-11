@@ -111,7 +111,7 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
 
         relayer.lastHeartbeat = block.timestamp;
 
-        emit RelayerHeartbeat(msg.sender, block.timestamp, block.number, signature);
+        emit RelayerHeartbeat(msg.sender, block.timestamp, block.number);
     }
 
     function recordRouteResult(address relayerAddress, bytes32 routeId, bool success) external onlyRole(REGISTRY_MANAGER_ROLE) {

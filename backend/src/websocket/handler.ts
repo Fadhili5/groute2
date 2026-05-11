@@ -18,7 +18,7 @@ export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
 
   clients.set(clientId, client);
 
-  socket.on("message", (raw) => {
+  socket.on("message", (raw: Buffer) => {
     try {
       const msg = JSON.parse(raw.toString());
 

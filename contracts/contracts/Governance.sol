@@ -149,7 +149,7 @@ contract Governance is AccessControl, Pausable, EIP712 {
         emit ProposalExecuted(proposalId);
     }
 
-    function cancelProposal(bytes32 proposalId) external onlyRole(GOVERNANCE_ROLE) {
+    function cancelProposal(bytes32 proposalId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         Proposal storage proposal = proposals[proposalId];
         if (proposal.id == bytes32(0)) revert ProposalNotFound(proposalId);
         if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
@@ -158,17 +158,17 @@ contract Governance is AccessControl, Pausable, EIP712 {
         emit ProposalCancelled(proposalId);
     }
 
-    function setVotingPower(address voter, uint256 power) external onlyRole(GOVERNANCE_ROLE) {
+    function setVotingPower(address voter, uint256 power) external onlyRole(DEFAULT_ADMIN_ROLE) {
         votingPower[voter] = power;
         emit VotingPowerUpdated(voter, power);
     }
 
-    function setQuorum(uint256 newQuorum) external onlyRole(GOVERNANCE_ROLE) {
+    function setQuorum(uint256 newQuorum) external onlyRole(DEFAULT_ADMIN_ROLE) {
         quorum = newQuorum;
         emit QuorumUpdated(newQuorum);
     }
 
-    function setVotingPeriod(uint256 newPeriod) external onlyRole(GOVERNANCE_ROLE) {
+    function setVotingPeriod(uint256 newPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
         votingPeriod = newPeriod;
         emit VotingPeriodUpdated(newPeriod);
     }
@@ -177,25 +177,25 @@ contract Governance is AccessControl, Pausable, EIP712 {
         return proposals[id];
     }
 
-    function getVotes(bytes32 proposalId) external view returns (address[] memory voters, uint256[] memory weights, bool[] memory supports) {
+    function getVotes(bytes32 proposalId) external view returns (address[] memory voters, uint256[] memory weights, bool[] memory inSupport) {
         address[] memory votersList = proposalVoters[proposalId];
         voters = new address[](votersList.length);
         weights = new uint256[](votersList.length);
-        supports = new bool[](votersList.length);
+        inSupport = new bool[](votersList.length);
 
         for (uint256 i = 0; i < votersList.length; i++) {
             Vote storage v = votes[proposalId][votersList[i]];
             voters[i] = v.voter;
             weights[i] = v.weight;
-            supports[i] = v.support;
+            inSupport[i] = v.support;
         }
     }
 
-    function pause() external onlyRole(GOVERNANCE_ROLE) {
+    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }
 
-    function unpause() external onlyRole(GOVERNANCE_ROLE) {
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
 }
