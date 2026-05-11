@@ -11,7 +11,7 @@ function ChainRenderer({ data }: ICellRendererParams<Chain>) {
   const dot = data.status === "healthy" ? "bg-matrix-green" : data.status === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red";
   return (
     <div className="flex items-center gap-2 h-full">
-      <span className="w-2 h-2 rounded-full flex-shrink-0">{dot}</span>
+      <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
       <span className="text-xs font-medium text-surface-200">{data.shortName}</span>
     </div>
   );
@@ -64,7 +64,7 @@ function SlipCell({ value }: ICellRendererParams<Chain>) {
 function StatusCell({ value }: ICellRendererParams<Chain>) {
   if (!value) return null;
   const color = value === "healthy" ? "bg-matrix-green" : value === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red";
-  return <span className="w-2 h-2 rounded-full inline-block">{color}</span>;
+  return <span className={cn("w-2 h-2 rounded-full inline-block", color)} />;
 }
 
 const CHAIN_DATA: Chain[] = [

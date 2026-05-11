@@ -35,7 +35,7 @@ const FRAGMENT_COLORS: Record<string, string> = {
 
 export function RouteVisualizer() {
   const { activeRoute } = useTerminalStore();
-  const [fragments] = useState<RouteFragment[]>(SAMPLE_FRAGMENTS);
+  const fragments = activeRoute ? activeRoute.fragments : SAMPLE_FRAGMENTS;
 
   const totalCost = fragments.reduce((s, f) => s + f.cost, 0);
   const totalLatency = fragments.reduce((s, f) => s + f.latency, 0);

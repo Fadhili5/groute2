@@ -1,5 +1,17 @@
 import "dotenv/config";
 
+function requiredEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`Missing required environment variable: ${name}`);
+    }
+    console.warn(`[config] WARNING: ${name} not set, using empty/default value`);
+    return "";
+  }
+  return val;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || "3001", 10),
   nodeEnv: process.env.NODE_ENV || "development",
@@ -22,10 +34,10 @@ export const config = {
   },
 
   contracts: {
-    intentRouter: process.env.INTENT_ROUTER || "",
-    fragmentVault: process.env.FRAGMENT_VAULT || "",
-    routeRegistry: process.env.ROUTE_REGISTRY || "",
-    settlementVerifier: process.env.SETTLEMENT_VERIFIER || "",
+    intentRouter: requiredEnv("INTENT_ROUTER"),
+    fragmentVault: requiredEnv("FRAGMENT_VAULT"),
+    routeRegistry: requiredEnv("ROUTE_REGISTRY"),
+    settlementVerifier: requiredEnv("SETTLEMENT_VERIFIER"),
   },
 
   zerog: {

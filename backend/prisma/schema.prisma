@@ -95,7 +95,7 @@ model Settlement {
 
 model LiquidityPool {
   id           String @id @default(uuid())
-  chainId      String
+  chainId      Int
   token        String
   depth        Float
   utilization  Float
@@ -103,7 +103,7 @@ model LiquidityPool {
   volume24h    Float
   fee          Float
 
-  chain Chain @relation(fields: [chainId], references: [id])
+  chain Chain @relation(fields: [chainId], references: [chainId])
 }
 
 model Alert {

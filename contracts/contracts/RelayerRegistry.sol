@@ -48,7 +48,7 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
     event RelayerActivated(address indexed relayer);
     event RelayerSlashed(address indexed relayer, uint256 amount, string reason);
     event RelayerBanned(address indexed relayer, string reason);
-    event RelayerHeartbeat(address indexed relayer, uint256 timestamp, uint256 blockNumber);
+    event RelayerHeartbeat(address indexed relayer, uint256 timestamp, uint256 blockNumber, bytes32 signature);
     event RouteAssigned(address indexed relayer, uint256 indexed chainId, bytes32 routeId);
     event RouteCompleted(address indexed relayer, bytes32 indexed routeId, bool success);
     event StakeWithdrawn(address indexed relayer, uint256 amount);

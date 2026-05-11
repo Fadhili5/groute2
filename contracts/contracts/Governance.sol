@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 contract Governance is AccessControl, Pausable, EIP712 {
     bytes32 public constant PROPOSAL_ROLE = keccak256("PROPOSAL_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
 
     bytes32 public constant PROPOSAL_TYPEHASH = keccak256("Proposal(address proposer,bytes32 targetContract,bytes data,uint256 value,uint256 nonce,uint256 deadline)");
 

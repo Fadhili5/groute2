@@ -138,26 +138,26 @@ export function CommandTerminal() {
 
   const renderLine = (line: string, i: number) => {
     const parts = line.split(/(\x1b\[[0-9;]*m)/g);
+    const colorMap: Record<string, string> = {
+      "32": "text-matrix-green",
+      "31": "text-matrix-red",
+      "33": "text-matrix-yellow",
+      "36": "text-matrix-accent",
+      "0": "text-surface-300",
+    };
+    const elements: React.ReactNode[] = [];
+    let currentColor = "text-surface-300";
+    parts.forEach((part, j) => {
+      if (part.startsWith("\x1b[")) {
+        const code = part.slice(2, -1);
+        currentColor = colorMap[code] || "text-surface-300";
+      } else if (part) {
+        elements.push(<span key={j} className={currentColor}>{part}</span>);
+      }
+    });
     return (
       <div key={i} className="whitespace-pre-wrap break-all">
-        {parts.map((part, j) => {
-          if (part.startsWith("\x1b[")) {
-            const code = part.slice(2, -1);
-            const colorMap: Record<string, string> = {
-              "32": "text-matrix-green",
-              "31": "text-matrix-red",
-              "33": "text-matrix-yellow",
-              "36": "text-matrix-accent",
-              "0": "text-surface-300",
-            };
-            return <span key={j} className={colorMap[code] || "text-surface-300"} />;
-          }
-          return (
-            <span key={j} className="text-surface-300">
-              {part}
-            </span>
-          );
-        })}
+        {elements}
       </div>
     );
   };

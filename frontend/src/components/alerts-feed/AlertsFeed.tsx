@@ -38,11 +38,16 @@ function createInitialAlerts(): Alert[] {
 
 export function AlertsFeed() {
   const [mounted, setMounted] = useState(false);
-  const { alerts, addAlert, markAlertRead } = useAlertStore();
-  const [items, setItems] = useState<Alert[]>(() => createInitialAlerts());
+  const { alerts, addAlert, markAlertRead, setAlerts } = useAlertStore();
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (alerts.length === 0) {
+      setAlerts(createInitialAlerts());
+    }
+  }, [alerts.length, setAlerts]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -61,22 +66,21 @@ export function AlertsFeed() {
         read: false,
       };
       addAlert(newAlert);
-      setItems((prev) => [newAlert, ...prev].slice(0, 50));
     }, 8000);
 
     return () => clearInterval(interval);
   }, [addAlert]);
 
-  const filtered = filter ? items.filter((a) => a.type === filter) : items;
+  const filtered = filter ? alerts.filter((a) => a.type === filter) : alerts;
 
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header flex-shrink-0">
         <span className="panel-title">Alerts Feed</span>
         <div className="flex items-center gap-1">
-          {items.filter((a) => !a.read).length > 0 && (
+          {alerts.filter((a) => !a.read).length > 0 && (
             <span className="text-2xs font-mono text-matrix-yellow bg-matrix-yellow/10 px-1.5 py-0.5 rounded-sm">
-              {items.filter((a) => !a.read).length} new
+              {alerts.filter((a) => !a.read).length} new
             </span>
           )}
         </div>
