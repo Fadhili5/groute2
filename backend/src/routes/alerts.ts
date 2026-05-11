@@ -7,30 +7,43 @@ interface RouteOptions {
   redis: Redis;
 }
 
-const ALERTS = [
-  { id: "a1", type: "route_success", severity: "info", message: "Route 0x7f3c: 50,000 USDC ARB \u2192 ETH completed in 12.4s", timestamp: Date.now() - 5000, read: false },
-  { id: "a2", type: "mev_event", severity: "warning", message: "MEV bot detected on Ethereum mempool - protection engaged", timestamp: Date.now() - 15000, read: false, chain: "ethereum" },
-  { id: "a3", type: "bridge_outage", severity: "critical", message: "Wormhole: 4 relayers delayed on Avalanche path", timestamp: Date.now() - 30000, read: false, chain: "avalanche" },
-  { id: "a4", type: "gas_spike", severity: "warning", message: "Base gas spike: 3.2 gwei (+240% in 5 min)", timestamp: Date.now() - 60000, read: false, chain: "base" },
-  { id: "a5", type: "liquidity_spike", severity: "info", message: "Uniswap V3 ETH/USDC pool: +$42M depth added", timestamp: Date.now() - 120000, read: true, chain: "ethereum" },
-  { id: "a6", type: "relayer_failure", severity: "warning", message: "Relayer node 0x8f3c missed 3 consecutive attestations", timestamp: Date.now() - 240000, read: true },
-];
-
 export async function alertRoutes(app: FastifyInstance, opts: RouteOptions) {
-  app.get("/", async () => ({ alerts: ALERTS }));
+  app.get("/", async () => {
+    const alerts = await opts.prisma.alert.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return {
+      alerts: alerts.map((a) => ({ ...a, timestamp: a.createdAt.getTime() })),
+    };
+  });
 
-  app.get("/unread", async () => ({
-    unread: ALERTS.filter((a) => !a.read).length,
-    alerts: ALERTS.filter((a) => !a.read),
-  }));
+  app.get("/unread", async () => {
+    const alerts = await opts.prisma.alert.findMany({
+      where: { read: false },
+      orderBy: { createdAt: "desc" },
+    });
+    return {
+      unread: alerts.length,
+      alerts: alerts.map((a) => ({ ...a, timestamp: a.createdAt.getTime() })),
+    };
+  });
 
   app.put("/:id/read", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const alert = ALERTS.find((a) => a.id === id);
-    if (!alert) {
+    try {
+      await opts.prisma.alert.update({ where: { id }, data: { read: true } });
+      return { success: true };
+    } catch {
       return reply.status(404).send({ error: { code: "ALERT_NOT_FOUND", message: "Alert not found" } });
     }
-    alert.read = true;
-    return { success: true };
+  });
+
+  app.post("/", async (request, reply) => {
+    const body = request.body as { type: string; severity: string; message: string; chainId?: string };
+    const alert = await opts.prisma.alert.create({
+      data: { type: body.type, severity: body.severity, message: body.message, chainId: body.chainId },
+    });
+    return { ...alert, timestamp: alert.createdAt.getTime() };
   });
 }

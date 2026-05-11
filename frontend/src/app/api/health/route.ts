@@ -1,9 +1,3 @@
-import { NextResponse } from "next/server";
-
-export async function GET() {
-  return NextResponse.json({
-    status: "healthy",
-    timestamp: Date.now(),
-    uptime: process.uptime(),
-  });
-}
+export const dynamic = "force-dynamic";
+import { proxyGet } from "@/lib/backend";
+export async function GET() { return proxyGet("/health"); }

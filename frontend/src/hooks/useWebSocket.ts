@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useMarketStore, useAlertStore, useWalletStore } from "@/stores";
 
 interface WSMessage {
-  type: "chain_update" | "alert" | "price_update" | "kpi_update" | "block_update";
+  type: "chain_update" | "market_update" | "alert" | "price_update" | "kpi_update" | "block_update" | "execution_update" | "settlement_update";
   data: any;
 }
 
@@ -62,8 +62,19 @@ export function useWebSocket(url?: string) {
               case "chain_update":
                 setChains(msg.data);
                 break;
+              case "market_update": {
+                // backend sends single chain delta: { chain, gas, liquidity, spread }
+                const current = useMarketStore.getState().chains;
+                const updated = current.map((c) =>
+                  c.name === msg.data.chain
+                    ? { ...c, gas: parseFloat(msg.data.gas) || c.gas, liquidity: msg.data.liquidity || c.liquidity }
+                    : c
+                );
+                setChains(updated);
+                break;
+              }
               case "alert":
-                addAlert(msg.data);
+                addAlert({ ...msg.data, id: msg.data.id ?? `ws-${Date.now()}`, read: false, timestamp: msg.data.timestamp ?? Date.now() });
                 break;
               case "kpi_update":
                 setKpis(msg.data);

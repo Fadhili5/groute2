@@ -14,6 +14,15 @@ model Chain {
   chainId   Int      @unique
   rpcUrl    String?
   status    String   @default("healthy")
+  liquidity Float    @default(0)
+  spread    Float    @default(0)
+  gas       Float    @default(0)
+  bridgeFee Float    @default(0.05)
+  slippage  Float    @default(0.01)
+  latency   Int      @default(0)
+  privacy   Int      @default(50)
+  mev       Int      @default(50)
+  eta       String   @default("0s")
 
   sourceRoutes     Route[]        @relation("SourceChain")
   destRoutes       Route[]        @relation("DestChain")
