@@ -30,7 +30,7 @@ const SIDEBAR_MODULES = ["AiSolver"];
 export default function Home() {
   const [activeTab, setActiveTab] = useState("market");
   const [isMobile, setIsMobile] = useState(false);
-  useWebSocket();
+  useWebSocket(process.env.NEXT_PUBLIC_WS_URL);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);

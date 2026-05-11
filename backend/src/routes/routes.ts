@@ -9,57 +9,83 @@ interface RouteOptions {
 
 export async function routeRoutes(app: FastifyInstance, opts: RouteOptions) {
   app.get("/", async () => {
+    const routes = await opts.prisma.route.findMany({
+      include: { sourceChain: true, destChain: true },
+      orderBy: { totalVolume: "desc" },
+    });
     return {
-      routes: [
-        { id: "r1", name: "ETH-USDC Arbitrum Express", sourceChain: "Ethereum", destChain: "Arbitrum", avgLatency: 8.4, successRate: 99.2, totalVolume: 142000000, status: "active" },
-        { id: "r2", name: "USDT Base Solana", sourceChain: "Base", destChain: "Solana", avgLatency: 6.2, successRate: 97.8, totalVolume: 89000000, status: "active" },
-        { id: "r3", name: "BTC Avalanche Bridge", sourceChain: "Ethereum", destChain: "Avalanche", avgLatency: 14.1, successRate: 95.4, totalVolume: 45000000, status: "active" },
-        { id: "r4", name: "AVAX BNB Express", sourceChain: "Avalanche", destChain: "BNB Chain", avgLatency: 11.3, successRate: 93.1, totalVolume: 28000000, status: "degraded" },
-      ],
+      routes: routes.map((r) => ({
+        id: r.id,
+        name: r.name,
+        sourceChain: r.sourceChain.name,
+        destChain: r.destChain.name,
+        avgLatency: r.avgLatency,
+        successRate: r.successRate,
+        totalVolume: r.totalVolume,
+        status: r.status,
+      })),
     };
   });
 
   app.get("/recommend", async () => {
+    const best = await opts.prisma.route.findFirst({
+      where: { status: "active" },
+      orderBy: [{ successRate: "desc" }, { avgLatency: "asc" }],
+      include: { sourceChain: true, destChain: true },
+    });
+
+    const alternatives = await opts.prisma.route.findMany({
+      where: { status: "active", id: { not: best?.id } },
+      orderBy: { successRate: "desc" },
+      take: 2,
+      include: { sourceChain: true, destChain: true },
+    });
+
     return {
       recommended: {
-        path: "ETH \u2192 LayerZero \u2192 Arbitrum \u2192 Uniswap V3 \u2192 USDC",
-        reason: "Optimal gas + liquidity combination. LayerZero shows 99.8% uptime with 2.1s finality. Arbitrum DEX pools have $456M depth with minimal slippage.",
-        confidence: 94,
+        path: best
+          ? `${best.sourceChain.shortName} → LayerZero → ${best.destChain.shortName}`
+          : "ETH → LayerZero → Arbitrum → Uniswap V3 → USDC",
+        reason: best
+          ? `${best.successRate.toFixed(1)}% success rate, ${best.avgLatency.toFixed(1)}s avg latency`
+          : "Optimal gas + liquidity combination",
+        confidence: best ? Math.min(99, best.successRate) : 94,
         bridgeHealth: "99.8% uptime",
         mevForecast: "Low risk - Flashbots + privacy RPC",
-        alternatives: [
-          "ETH \u2192 Across \u2192 Base \u2192 Aerodrome \u2192 USDC (3.2s, $0.08 gas)",
-          "ETH \u2192 CCTP \u2192 Avalanche \u2192 Trader Joe \u2192 USDC (4.1s, $0.15 gas)",
-        ],
+        alternatives: alternatives.map(
+          (r) => `${r.sourceChain.shortName} → ${r.destChain.shortName} (${r.avgLatency.toFixed(1)}s, ${r.successRate.toFixed(1)}% success)`
+        ),
       },
     };
   });
 
-  app.get("/simulate", async () => {
-    return {
-      id: `sim-${Date.now()}`,
-      status: "completed",
-      fragments: [
-        { type: "wallet", label: "Source wallet", duration: "0.2s", cost: "$0.00" },
-        { type: "split", label: "3 fragments", duration: "0.5s", cost: "$0.01" },
-        { type: "bridge", label: "LayerZero \u2192 Arbitrum", duration: "2.1s", cost: "$0.05" },
-        { type: "swap", label: "Uniswap V3: USDC \u2192 ETH", duration: "1.8s", cost: "$0.03" },
-        { type: "settle", label: "Settlement verification", duration: "0.5s", cost: "$0.01" },
-      ],
-      totalDuration: "5.1s",
-      totalCost: "$0.10",
-      confidence: 94.2,
-    };
-  });
+  app.get("/simulate", async () => ({
+    id: `sim-${Date.now()}`,
+    status: "completed",
+    fragments: [
+      { type: "wallet", label: "Source wallet", duration: "0.2s", cost: "$0.00" },
+      { type: "split", label: "3 fragments", duration: "0.5s", cost: "$0.01" },
+      { type: "bridge", label: "LayerZero → Arbitrum", duration: "2.1s", cost: "$0.05" },
+      { type: "swap", label: "Uniswap V3: USDC → ETH", duration: "1.8s", cost: "$0.03" },
+      { type: "settle", label: "Settlement verification", duration: "0.5s", cost: "$0.01" },
+    ],
+    totalDuration: "5.1s",
+    totalCost: "$0.10",
+    confidence: 94.2,
+  }));
 
   app.post("/compare", async (request) => {
     const body = request.body as { asset?: string; chain1?: string; chain2?: string };
+    const [c1, c2] = await Promise.all([
+      opts.prisma.chain.findFirst({ where: { name: body.chain1 ?? "Ethereum" } }),
+      opts.prisma.chain.findFirst({ where: { name: body.chain2 ?? "Arbitrum" } }),
+    ]);
     return {
       comparison: [
-        { chain: body.chain1 || "Ethereum", liquidity: "$842M", spread: "0.02%", gas: "12.4 gwei", latency: "12s", score: 92 },
-        { chain: body.chain2 || "Arbitrum", liquidity: "$456M", spread: "0.03%", gas: "0.08 gwei", latency: "3s", score: 88 },
+        { chain: c1?.name ?? body.chain1, liquidity: `$${((c1?.liquidity ?? 842e6) / 1e6).toFixed(0)}M`, spread: `${c1?.spread ?? 0.02}%`, gas: `${c1?.gas ?? 12.4} gwei`, latency: `${c1?.latency ?? 12}s`, score: c1?.mev ?? 92 },
+        { chain: c2?.name ?? body.chain2, liquidity: `$${((c2?.liquidity ?? 456e6) / 1e6).toFixed(0)}M`, spread: `${c2?.spread ?? 0.03}%`, gas: `${c2?.gas ?? 0.08} gwei`, latency: `${c2?.latency ?? 3}s`, score: c2?.mev ?? 85 },
       ],
-      recommendation: body.chain2 || "Arbitrum",
+      recommendation: c2?.name ?? body.chain2,
       reason: "Lower gas costs and faster finality outweigh slightly lower liquidity depth.",
     };
   });
