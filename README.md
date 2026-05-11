@@ -108,6 +108,45 @@ See [docs/architecture.md](docs/architecture.md) for detailed system design, dat
 
 ---
 
+## User Flow (Step-by-Step)
+
+Here's what happens from the moment you open the app to completing a cross-chain transfer:
+
+```
+STEP 1: OPEN APP → Market Matrix loads 6 chains with 9 metrics each
+         ├─ Header shows KPI bar (TVL, Volume, Routes, MEV)
+         ├─ Sidebar shows system health
+         ├─ AI Solver recommends a route
+         └─ StatusStrip scrolls ticker events
+
+STEP 2: EXPLORE → Switch tabs to view each module
+         ├─ LIQUIDITY: Pool depth bar charts + pool grid
+         ├─ ROUTES: Fragment pipeline visualization
+         └─ WATCHLIST: 7 tracked assets in right sidebar
+
+STEP 3: EXECUTE → Click EXECUTION tab, fill the form
+         ├─ Click SIMULATE → status: simulating → simulated (1.5s)
+         ├─ Click OPTIMIZE → status: optimizing → optimized (2s)
+         └─ Click EXECUTE → mock tx hash → status: completed (3s)
+
+STEP 4: MONITOR → Watch alerts auto-generate every 8s
+         ├─ Alerts Feed shows route_success, mev_event, gas_spike
+         └─ Status Strip updates with live ticker
+
+STEP 5: VERIFY → Click SETTLEMENT tab, paste tx hash
+         ├─ Inspect: shows full settlement details
+         └─ Verify On-Chain: returns confirmation data
+
+STEP 6: POWER-USER → Click TERMINAL tab
+         ├─ Type: route 50000 usdc arb eth private
+         ├─ Type: status → system health
+         └─ Type: help → all available commands
+```
+
+See [docs/walkthrough.md](docs/walkthrough.md) for the complete end-to-end walkthrough with every screen, API call, and data flow explained.
+
+---
+
 ## Modules (9 Frontend Components)
 
 ### 1. Market Matrix
@@ -199,13 +238,16 @@ Open **[http://localhost:3000](http://localhost:3000)**
 
 | Document | Description |
 |----------|-------------|
+| [Walkthrough](docs/walkthrough.md) | Step-by-step user journey: every screen, action, and data flow |
 | [Architecture](docs/architecture.md) | System design, data flow, component interaction, state management |
+| [Live Data Plan](docs/architecture-live.md) | Migration plan: replace mock data with real blockchain/API data |
 | [API Reference](docs/api.md) | All 21 API endpoints with request/response schemas |
 | [Smart Contracts](docs/contracts.md) | 8 Solidity contracts — spec, functions, events, deployment |
 | [Deployment Guide](docs/deployment.md) | Local, Docker, K8s, Vercel, Coolify, Production |
 | [Data Flow](docs/data-flow.md) | End-to-end transaction flow, state management, WebSocket protocol |
 | [State Management](docs/state-management.md) | Zustand stores, store hierarchy, cross-store interactions |
 | [Database Schema](docs/database.md) | Prisma models, relationships, migrations |
+| [CTO Review](docs/cto-review.md) | Strategic assessment: grades, risks, recommendations |
 | [Security](SECURITY.md) | Contract security, MEV protection, key management |
 | [Contributing](CONTRIBUTING.md) | Development setup, code standards, PR process |
 
