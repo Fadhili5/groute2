@@ -15,9 +15,11 @@ model Chain {
   rpcUrl    String?
   status    String   @default("healthy")
 
-  routes         Route[]
-  liquidityPools LiquidityPool[]
-  settlements    Settlement[]
+  sourceRoutes     Route[]        @relation("SourceChain")
+  destRoutes       Route[]        @relation("DestChain")
+  liquidityPools   LiquidityPool[]
+  sourceSettlements Settlement[]  @relation("SettlementSource")
+  destSettlements   Settlement[]  @relation("SettlementDest")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

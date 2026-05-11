@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridOptions, GridReadyEvent, ICellRendererParams, ValueFormatterParams } from "ag-grid-community";
+import type { ColDef, GridOptions, GridReadyEvent, ICellRendererParams, RowClickedEvent } from "ag-grid-community";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Chain } from "@/types";
 
@@ -11,7 +12,7 @@ function ChainRenderer({ data }: ICellRendererParams<Chain>) {
   const dot = data.status === "healthy" ? "bg-matrix-green" : data.status === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red";
   return (
     <div className="flex items-center gap-2 h-full">
-      <span className="w-2 h-2 rounded-full flex-shrink-0">{dot}</span>
+      <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
       <span className="text-xs font-medium text-surface-200">{data.shortName}</span>
     </div>
   );
@@ -64,7 +65,7 @@ function SlipCell({ value }: ICellRendererParams<Chain>) {
 function StatusCell({ value }: ICellRendererParams<Chain>) {
   if (!value) return null;
   const color = value === "healthy" ? "bg-matrix-green" : value === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red";
-  return <span className="w-2 h-2 rounded-full inline-block">{color}</span>;
+  return <span className={cn("w-2 h-2 rounded-full inline-block", color)} />;
 }
 
 const CHAIN_DATA: Chain[] = [
@@ -123,10 +124,10 @@ const COL_DEFS: ColDef<Chain>[] = [
     width: 55,
     minWidth: 45,
     cellRenderer: MetricCell,
+    cellRendererParams: { format: "{v}bp" },
     sortable: true,
     resizable: true,
     suppressMovable: true,
-    valueFormatter: (params: ValueFormatterParams) => `${params.value}bp`,
   },
   {
     field: "slippage",
@@ -144,10 +145,10 @@ const COL_DEFS: ColDef<Chain>[] = [
     width: 45,
     minWidth: 40,
     cellRenderer: MetricCell,
+    cellRendererParams: { format: "{v}s" },
     sortable: true,
     resizable: true,
     suppressMovable: true,
-    valueFormatter: (params: ValueFormatterParams) => `${params.value}s`,
   },
   {
     field: "privacy",
@@ -205,14 +206,12 @@ export function MarketMatrix() {
   const gridRef = useRef<AgGridReact>(null);
   const [mounted, setMounted] = useState(false);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "shortName", 
-    "liquidity", 
-    "spread", 
-    "status"
-  ]);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(
+    COL_DEFS.map((c) => c.field!)
+  );
 
   const [rowData, setRowData] = useState<Chain[]>([]);
+  const [selectedChain, setSelectedChain] = useState<Chain | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -237,6 +236,10 @@ const visibleColumnDefs = COL_DEFS.filter((colDef): colDef is ColDef<Chain> =>
 
   const onGridReady = useCallback((e: GridReadyEvent) => {
     e.api.sizeColumnsToFit();
+  }, []);
+
+  const onRowClicked = useCallback((e: RowClickedEvent<Chain>) => {
+    setSelectedChain((prev) => (prev?.id === e.data?.id ? null : e.data ?? null));
   }, []);
 
   if (!mounted) {
@@ -343,11 +346,49 @@ onClick={() => {
         columnDefs={visibleColumnDefs}
         gridOptions={GRID_OPTS}
         onGridReady={onGridReady}
+        onRowClicked={onRowClicked}
         domLayout="normal"
         rowSelection="single"
         getRowId={(p) => p.data.id}
       />
     </div>
+
+    {selectedChain && (
+      <div className="flex-shrink-0 border-t border-matrix-border bg-surface-950 px-3 py-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "w-2 h-2 rounded-full",
+              selectedChain.status === "healthy" ? "bg-matrix-green" : selectedChain.status === "degraded" ? "bg-matrix-yellow" : "bg-matrix-red"
+            )} />
+            <span className="text-xs font-semibold text-surface-200">{selectedChain.name}</span>
+            <span className="text-2xs font-mono text-surface-500">{selectedChain.shortName}</span>
+          </div>
+          <button onClick={() => setSelectedChain(null)} className="text-surface-600 hover:text-surface-400 transition-colors">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="grid grid-cols-5 gap-x-4 gap-y-1.5">
+          {[
+            { label: "Liquidity", value: selectedChain.liquidity >= 1e9 ? `$${(selectedChain.liquidity / 1e9).toFixed(1)}B` : `$${(selectedChain.liquidity / 1e6).toFixed(0)}M` },
+            { label: "Spread", value: `${Number(selectedChain.spread).toFixed(2)}%` },
+            { label: "Gas", value: selectedChain.gas < 1 ? `$${(selectedChain.gas * 100).toFixed(0)}¢` : `$${Number(selectedChain.gas).toFixed(2)}` },
+            { label: "Bridge Fee", value: `${selectedChain.bridgeFee}bp` },
+            { label: "Slippage", value: `${Number(selectedChain.slippage).toFixed(2)}%` },
+            { label: "Latency", value: `${selectedChain.latency}s` },
+            { label: "Privacy", value: `${selectedChain.privacy}/100` },
+            { label: "MEV", value: selectedChain.mev >= 80 ? "LOW" : selectedChain.mev >= 60 ? "MED" : "HIGH" },
+            { label: "ETA", value: selectedChain.eta },
+            { label: "Status", value: selectedChain.status },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <div className="text-2xs text-surface-600 uppercase tracking-wider">{label}</div>
+              <div className="text-2xs font-mono text-surface-300 mt-0.5">{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 }
