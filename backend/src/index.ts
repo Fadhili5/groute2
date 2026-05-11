@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
-import { PrismaClient } from "@prisma/client";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { marketRoutes } from "./routes/market.js";
@@ -13,8 +12,21 @@ import { alertRoutes } from "./routes/alerts.js";
 import { websocketHandler } from "./websocket/handler.js";
 import { errorHandler } from "./middleware/error.js";
 
-const prisma = new PrismaClient();
-const redis = new Redis(config.redis.url);
+let prisma: any = null;
+try {
+  const { PrismaClient } = await import("@prisma/client");
+  prisma = new PrismaClient();
+} catch {
+  console.warn("Prisma unavailable — running without database. /api/chains will return mock data.");
+}
+
+let redis: any = null;
+try {
+  redis = new Redis(config.redis.url);
+  redis.on("error", () => {});
+} catch {
+  console.warn("Redis unavailable — running without cache.");
+}
 
 const app = Fastify({
   logger: {
@@ -55,6 +67,16 @@ app.get("/api/kpi", async () => ({
 }));
 
 app.get("/api/chains", async () => {
+  if (!prisma) {
+    return [
+      { id: "ethereum", name: "Ethereum", shortName: "ETH", chainId: 1, rpcUrl: null, status: "healthy", liquidityPools: [] },
+      { id: "arbitrum", name: "Arbitrum", shortName: "ARB", chainId: 42161, rpcUrl: null, status: "healthy", liquidityPools: [] },
+      { id: "base", name: "Base", shortName: "BASE", chainId: 8453, rpcUrl: null, status: "healthy", liquidityPools: [] },
+      { id: "solana", name: "Solana", shortName: "SOL", chainId: 101, rpcUrl: null, status: "healthy", liquidityPools: [] },
+      { id: "avalanche", name: "Avalanche", shortName: "AVAX", chainId: 43114, rpcUrl: null, status: "degraded", liquidityPools: [] },
+      { id: "bnb", name: "BNB Chain", shortName: "BNB", chainId: 56, rpcUrl: null, status: "healthy", liquidityPools: [] },
+    ];
+  }
   const chains = await prisma.chain.findMany({
     include: { liquidityPools: true },
   });
