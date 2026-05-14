@@ -36,19 +36,24 @@ Next.js server renders layout.tsx (RootLayout)
                 │   └── Reads useWalletStore → watchlist || defaults
                 │
                 └──► useWebSocket() hook fires
-                    ├── If no WS_URL → simulation mode
-                    │   └── setInterval(8000ms):
-                    │       1. Update chain gas prices (random walk)
-                    │       2. Generate random alerts
+                    ├── Always loads initial data via REST API:
+                    │   ├── api.getChains() → useMarketStore.setChains()
+                    │   ├── api.getKpi() → useWalletStore.setKpis()
+                    │   └── api.getSystemHealth() → useWalletStore.setSystemHealth()
+                    │
+                    ├── If no WS_URL → REST polling only
+                    │   (components handle their own polling)
+                    │
                     └── If WS_URL → WebSocket connection
                         ├── ws://host:3001/ws
                         ├── Server sends { type: "connected" }
                         ├── onmessage handler:
                         │   ├── chain_update → useMarketStore.setChains()
+                        │   ├── market_update → update gas/liquidity deltas
                         │   ├── alert → useAlertStore.addAlert()
                         │   ├── kpi_update → useWalletStore.setKpis()
                         │   └── block_update → useWalletStore.setSystemHealth()
-                        └── onclose → reconnect after 5s
+                        └── onclose → exponential backoff reconnect
 ```
 
 ---

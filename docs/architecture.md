@@ -7,8 +7,8 @@ GhostRoute Terminal is a three-tier cross-chain execution platform:
 | Tier | Technology | Purpose |
 |------|-----------|---------|
 | **Frontend** | Next.js 14 (App Router) + Zustand + AG Grid + Recharts + xterm.js | Institutional trading terminal UI |
-| **Backend** | Fastify 4 + Prisma ORM + PostgreSQL + Redis + BullMQ + WebSockets | API server, data persistence, real-time streaming |
-| **Contracts** | Solidity 0.8.24 + OpenZeppelin v5 | On-chain intent routing, settlement, governance |
+| **Backend** | Fastify 4 + Prisma ORM + PostgreSQL + Redis + BullMQ + WebSockets + Services | API server, data persistence, real-time streaming |
+| **Contracts** | Solidity 0.8.26 + OpenZeppelin v5 | On-chain intent routing, settlement, governance |
 
 ---
 
@@ -38,22 +38,21 @@ GhostRoute Terminal is a three-tier cross-chain execution platform:
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Zustand State Management (7 stores)          │   │
+│  │              Zustand State Management (6 stores)          │   │
 │  │  market-store ── route-store ── alert-store ── solver    │   │
-│  │  wallet-store ── ui-store ── terminal-store              │   │
+│  │  wallet-store ── ui-store                                │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Next.js API Layer (21 route.ts)              │   │
-│  │  /api/market/*  /api/execution/*  /api/settlement/*      │   │
-│  │  /api/routes/*  /api/alerts/*     /api/health            │   │
-│  │  /api/kpi       /api/system/*                            │   │
+│  │         API Layer: Next.js rewrites → Fastify backend      │   │
+│  │  All /api/* requests proxied to localhost:3001            │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              WebSocket Client (useWebSocket hook)          │   │
-│  │  Auto-connect · Reconnect (5s) · Sim fallback ·          │   │
-│  │  Handles: chain_update, alert, price_update, kpi_update  │   │
+│  │  Auto-connect · Exponential backoff reconnect            │   │
+│  │  Handles: chain_update, market_update, alert, kpi_update │   │
+│  │  Loads initial data from REST API on connect             │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
                            │
@@ -89,6 +88,7 @@ GhostRoute Terminal is a three-tier cross-chain execution platform:
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              WebSocket Handler (/ws)                      │   │
 │  │  Subscribe/unsubscribe channels                          │   │
+│  │  Redis Pub/Sub integration for real events               │   │
 │  │  Auto-generates events every 3s:                         │   │
 │  │    market_update · execution_update                       │   │
 │  │    settlement_update · alert                              │   │
@@ -109,8 +109,8 @@ GhostRoute Terminal is a three-tier cross-chain execution platform:
 │  └────────────┘  └────────────┘  └────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
                            │
-                           │ ethers.js RPC calls
-                           ▼
+                            │ RPC / API calls via services layer
+                            ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                    SMART CONTRACTS (8 Solidity)                   │
 │                                                                  │
@@ -191,23 +191,24 @@ User fills Execution Blotter form (source/dest/amount/options)
 Step 1: POST /api/execution/simulate
         │
         ├──► Zod validation (simulateSchema)
-        ├──► Redis cache result (TTL: 300s)
-        └──► Returns: gas, bridgeFee, slippage, ETA, confidence
+        ├──► Deterministic cost estimation based on chain gas data
+        ├──► Redis cache result (TTL: 300s) or in-memory fallback
+        └──► Returns: gas, bridgeFee, slippage, ETA, confidence, fragments
         │
         ▼
 Step 2: POST /api/execution/optimize (optional)
         │
         ├──► Zod validation
         ├──► Redis cache result (TTL: 300s)
-        └──► Returns: optimizedRoute, gas, savings, confidence
+        └──► Returns: optimizedRoute, gas, savings, confidence, bridges
         │
         ▼
 Step 3: POST /api/execution/execute
         │
-        ├──► Generates mock tx hash
-        ├──► Redis cache order (TTL: 3600s)
+        ├──► Generates deterministic tx hash
+        ├──► Redis cache order (TTL: 3600s) + in-memory Map fallback
         │     └── setTimeout → marks completed after 5s
-        └──► Returns: order with 'executing' status
+        └──► Frontend polls GET /api/execution/orders/:id for completion
 ```
 
 ### 3. Settlement Verification Flow
@@ -218,7 +219,8 @@ User enters tx hash in Settlement Inspector
         ▼
 GET /api/settlement/verify/:txHash
         │
-        ├──► Redis cache check (TTL: 300s)
+        ├──► Redis cache check (TTL: 300s) or DB/proofs lookup
+        ├──► Returns 404 with PROOF_NOT_FOUND if not found
         └──► Returns: verified status, block, confirmations
         │
         ▼
@@ -234,7 +236,7 @@ POST /api/settlement/inspect (detailed inspection)
 Client connects to ws://host:3001/ws
         │
         ▼
-Server sends: { type: "connected", clientId, channels }
+Server sends: { type: "connected", clientId, channels, timestamp }
         │
         ▼
 Client sends: { type: "subscribe", channel: "market" }
@@ -252,7 +254,10 @@ Server sends events every 3s based on subscriptions:
         │     { type, channel, data: { txHash, state, confirmations } }
         │
         └──► channel "alerts" → alert
-              { type, channel, data: { severity, message, timestamp } }
+              { type, channel, data: { id, severity, message, timestamp } }
+        
+Redis Pub/Sub events on "ws:events" channel are also broadcast to subscribed clients.
+Server auto-reconnects to Redis and handles cleanup on socket close/error.
 ```
 
 ### 5. Smart Contract Interaction Flow
@@ -310,8 +315,7 @@ Zustand Stores (frontend/src/stores/)
   ├── useAlertStore ─────────── Alert feed (100 max, append-only)
   ├── useSolverStore ────────── Orders, settlements, liquidity, terminal
   ├── useWalletStore ────────── Wallet connection, watchlist, KPI, health
-  ├── useUIStore ────────────── Sidebar collapsed state (localStorage)
-  └── useTerminalStore ──────── Terminal data (comprehensive, used by some modules)
+  └── useUIStore ────────────── Sidebar collapsed state (localStorage)
 ```
 
 ### Module ↔ Store Mapping
@@ -319,11 +323,11 @@ Zustand Stores (frontend/src/stores/)
 | Module | Reads From | Writes To |
 |--------|-----------|-----------|
 | MarketMatrix | useMarketStore (chains) | — |
-| RouteVisualizer | useRouteStore (activeRoute) | — |
-| AiSolver | — | — (local state) |
-| ExecutionBlotter | — | — (local state) |
-| LiquidityHeatmap | — | — (local state) |
-| SettlementInspector | — | — (local state) |
+| RouteVisualizer | useRouteStore (activeRoute, fetches from API) | useRouteStore (setActiveRoute) |
+| AiSolver | — (fetches from API directly) | — |
+| ExecutionBlotter | useSolverStore (orders) | useSolverStore (addOrder, via API) |
+| LiquidityHeatmap | — (fetches from API) | — |
+| SettlementInspector | — (fetches from API) | — |
 | CommandTerminal | useSolverStore (terminalOutput) | useSolverStore (addTerminalOutput) |
 | AlertsFeed | useAlertStore (alerts) | useAlertStore (addAlert, markAlertRead) |
 | Watchlist | useWalletStore (watchlist) | useWalletStore (setWatchlist) |
@@ -343,15 +347,15 @@ Zustand Stores (frontend/src/stores/)
 
 ## Key Design Decisions
 
-1. **Dual API Layer**: Both frontend (Next.js route.ts) and backend (Fastify) expose identical API endpoints. The frontend handles direct SSR/CSR requests; the backend is the canonical API for external clients and WebSocket.
+1. **Single API Layer**: All `/api/*` requests from the frontend are proxied to the Fastify backend via Next.js rewrites (configured in `next.config.js`). There are no duplicate frontend API routes. The backend is the canonical API for all clients including WebSocket.
 
-2. **Redis as Primary Data Store for Orders**: Execution orders and simulation results live in Redis with TTL, not PostgreSQL. This provides fast reads/writes and automatic cleanup. PostgreSQL stores reference data (chains, routes, relayers).
+2. **Redis as Primary Data Store for Orders**: Execution orders and simulation results live in Redis with TTL, not PostgreSQL. This provides fast reads/writes and automatic cleanup. PostgreSQL stores reference data (chains, routes, relayers). An in-memory Map fallback is used when Redis is unavailable.
 
-3. **Mock Data Architecture**: The system uses deterministic mock data throughout for demo/MVP. All routes return structured sample data from in-memory arrays. The infrastructure for real chain connections exists (RPC configs, ethers.js dependency) but is not wired.
+3. **Graceful Fallback Architecture**: All backend routes handle null-Prisma and null-Redis gracefully by returning sensible default data. This allows the application to run and be developed without a database connection.
 
-4. **WebSocket First**: The frontend subscribes to WS events for real-time data. The `useWebSocket` hook auto-switches between simulated data (no URL) and live WS (URL provided), with 5s auto-reconnect.
+4. **Services Layer**: The backend includes a `services/` directory with integrations for RPC providers (ethers.js), price feeds (CoinGecko), and DeFi data (DeFiLlama). These are ready to be wired to real external APIs.
 
-5. **Simulation via setTimeout**: Execution routes simulate async workflow using setTimeout to transition order states (e.g., executing → completed after 5s).
+5. **WebSocket First**: The frontend subscribes to WS events for real-time data. The `useWebSocket` hook loads initial data from the REST API on connect and uses exponential backoff reconnection. No simulation fallback exists -- when no WS URL is configured, the hook falls back to REST polling.
 
 ---
 

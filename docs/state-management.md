@@ -1,6 +1,6 @@
 # State Management
 
-GhostRoute Terminal uses **Zustand** for client-side state management with 7 stores. The stores are organized by domain with specific responsibilities.
+GhostRoute Terminal uses **Zustand** for client-side state management with 6 stores. The stores are organized by domain with specific responsibilities.
 
 ---
 
@@ -14,7 +14,7 @@ GhostRoute Terminal uses **Zustand** for client-side state management with 7 sto
 | `useSolverStore` | `stores/solver-store.ts` | Orders, settlements, liquidity, terminal | CommandTerminal |
 | `useWalletStore` | `stores/wallet-store.ts` | Wallet + watchlist + KPI + health | Sidebar, Header, Watchlist, WS handler |
 | `useUIStore` | `stores/ui-store.ts` | UI state (sidebar, preferences) | Sidebar |
-| `useTerminalStore` | `stores/terminal-store.ts` | Comprehensive terminal state | RouteVisualizer (read) |
+| ~~`useTerminalStore`~~ | ~~`stores/terminal-store.ts`~~ | ~~REMOVED — redundant, duplicated all other stores~~ | ~~RouteVisualizer (now uses useRouteStore)~~ |
 
 ---
 

@@ -14,8 +14,8 @@ GhostRoute Terminal includes 8 production Solidity contracts, all compiled with 
 | 4 | SettlementVerifier | `contracts/SettlementVerifier.sol` | 166 | Proof submission, confirmation, dispute resolution |
 | 5 | PrivacyScoreOracle | `contracts/PrivacyScoreOracle.sol` | 123 | Chain-level privacy scoring |
 | 6 | TreasuryFeeCollector | `contracts/TreasuryFeeCollector.sol` | 150 | Tiered fee collection and distribution |
-| 7 | Governance | `contracts/Governance.sol` | 201 | Proposal creation, voting, execution |
-| 8 | RelayerRegistry | `contracts/RelayerRegistry.sol` | 213 | Relayer staking, heartbeats, slashing |
+| 7 | Governance | `contracts/Governance.sol` | 210 | Proposal creation, voting, execution (fixed state machine) |
+| 8 | RelayerRegistry | `contracts/RelayerRegistry.sol` | 213 | Relayer staking, heartbeats, slashing (underflow-safe) |
 
 **Standard Features (all contracts):**
 - OpenZeppelin `AccessControl` with 3-4 distinct roles
@@ -25,6 +25,10 @@ GhostRoute Terminal includes 8 production Solidity contracts, all compiled with 
 - Custom errors (gas-efficient)
 - NatSpec documentation
 - Events for all state changes
+
+**Bug Fixes Applied:**
+- Governance: Proposals now start in `Pending` state (was `Active`). Added `activateProposal()` transition. `castVote` reverts for zero voting power instead of granting weight=1. Separated `executeProposal` (sets `Succeeded`) from `finalizeProposal` (sets `Executed`). Added `approvalDelay` parameter.
+- RelayerRegistry: All `activeRelayers--` operations are guarded against underflow. Slashing is idempotent (skips if already slashed). `recordRouteResult` checks status before slashing. `heartbeat` emits the `signature` parameter.
 
 ---
 
@@ -415,6 +419,7 @@ struct ChainPrivacyConfig {
 ### Parameters
 - `votingPeriod = 50400` blocks (~7 days at 12s blocks)
 - `quorum = 4` minimum voters
+- `approvalDelay = 100` blocks review period before voting starts
 
 ### State Machine
 
@@ -425,12 +430,14 @@ Pending → Active → Succeeded → Executed
 ```
 
 ### Key Functions
-- `createProposal(targetContract, data, value, description)` — `PROPOSAL_ROLE`, returns proposal ID
-- `castVote(proposalId, support, reason)` — Weighted by `votingPower` (min 1), `AlreadyVoted` check
-- `executeProposal(proposalId)` — Checks `forVotes > againstVotes` AND `quorum` met, `EXECUTOR_ROLE`
+- `createProposal(targetContract, data, value, description)` — `PROPOSAL_ROLE`, creates in `Pending` state
+- `activateProposal(proposalId)` — Anyone can call after `approvalDelay` blocks, transitions to `Active`
+- `castVote(proposalId, support, reason)` — Weighted by `votingPower`, reverts if weight is 0 (NoVotingPower error), `AlreadyVoted` check
+- `executeProposal(proposalId)` — `EXECUTOR_ROLE`, checks `forVotes > againstVotes` AND `quorum` met, sets `Succeeded` state
+- `finalizeProposal(proposalId)` — `EXECUTOR_ROLE`, transitions `Succeeded` → `Executed`
 - `cancelProposal(proposalId)` — `GOVERNANCE_ROLE`
 - `setVotingPower(voter, power)` — `GOVERNANCE_ROLE`
-- `setQuorum(uint256)` / `setVotingPeriod(uint256)` — `GOVERNANCE_ROLE`
+- `setQuorum(uint256)` / `setVotingPeriod(uint256)` / `setApprovalDelay(uint256)` — `GOVERNANCE_ROLE`
 
 ---
 
@@ -461,6 +468,13 @@ Inactive → Active → Slashed → Banned
 ```
 
 ### Key Functions
+
+**Security:**
+- All `activeRelayers--` operations are guarded with `if (activeRelayers > 0)` to prevent underflow
+- `_slash()` is idempotent -- returns early if relayer is not `Active`
+- `recordRouteResult` checks `relayer.status == RelayerStatus.Active` before slashing
+- `banRelayer` checks if relayer is already `Banned` before processing
+- `heartbeat` now emits the `signature` parameter in the event
 
 #### `registerRelayer(endpoint, supportedChains)` — `payable`
 - Requires `msg.value >= MIN_STAKE` (10 ETH)

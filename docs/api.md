@@ -1,11 +1,6 @@
 # API Reference
 
-GhostRoute Terminal exposes 21 API endpoints through two layers:
-
-1. **Frontend API** (`frontend/src/app/api/**/route.ts`) — Next.js App Router route handlers served at `http://localhost:3000/api/*`
-2. **Backend API** (`backend/src/routes/*.ts`) — Fastify server routes served at `http://localhost:3001/api/*`
-
-Both layers implement identical endpoints and response schemas. The Fastify backend is the canonical API.
+GhostRoute Terminal exposes API endpoints through a single Fastify backend server. All frontend requests to `/api/*` are proxied to the backend via Next.js rewrites (configured in `next.config.js`).
 
 ---
 
@@ -13,9 +8,9 @@ Both layers implement identical endpoints and response schemas. The Fastify back
 
 | Environment | URL |
 |-------------|-----|
-| Development (Frontend) | `http://localhost:3000/api` |
+| Development (Frontend) | `http://localhost:3000/api` (proxied to `http://localhost:3001/api`) |
 | Development (Backend) | `http://localhost:3001/api` |
-| Production | `https://your-domain.vercel.app/api` |
+| Production | `https://your-domain.com/api` |
 
 ---
 
@@ -230,7 +225,7 @@ Optimize route parameters — finds the most efficient path between chains.
 
 ### POST /api/execution/execute
 
-Execute a route order. Creates an order with `executing` status; transitions to `completed` after 5 seconds.
+Execute a route order. Creates an order with `executing` status; transitions to `completed` after 5 seconds. The frontend polls `GET /api/execution/orders/:id` to detect completion.
 
 **Request Body:** Same schema as `/simulate`
 
@@ -699,29 +694,30 @@ All messages are JSON-encoded.
 
 ## API Route Map
 
-| # | Method | Route | Layer | Description |
-|---|--------|-------|-------|-------------|
-| 1 | GET | /api/market/chains | Both | All chains with metrics |
-| 2 | GET | /api/market/chains/:id | Backend | Single chain details |
-| 3 | GET | /api/market/liquidity | Both | Liquidity pool data |
-| 4 | GET | /api/market/ticker | Both | Live ticker feed |
-| 5 | POST | /api/execution/simulate | Both | Simulate route execution |
-| 6 | POST | /api/execution/optimize | Both | Optimize route params |
-| 7 | POST | /api/execution/execute | Both | Execute route order |
-| 8 | GET | /api/execution/orders | Both | List recent orders |
-| 9 | GET | /api/execution/orders/:id | Both | Get order by ID |
-| 10 | GET | /api/settlement/proofs | Both | Settlement proofs |
-| 11 | GET | /api/settlement/verify/:txHash | Both | On-chain verification |
-| 12 | POST | /api/settlement/inspect | Both | Inspect settlement |
-| 13 | GET | /api/routes | Both | Registered routes |
-| 14 | GET | /api/routes/recommend | Both | AI recommendation |
-| 15 | GET | /api/routes/simulate | Both | Route simulation |
-| 16 | POST | /api/routes/compare | Both | Compare two chains |
-| 17 | GET | /api/alerts | Both | All alerts |
-| 18 | GET | /api/alerts/unread | Both | Unread alert count |
-| 19 | PUT/POST | /api/alerts/:id/read | Both | Mark alert read |
-| 20 | GET | /api/health | Both | Health check |
-| 21 | GET | /api/kpi | Both | Key performance indicators |
-| 22 | GET | /api/chains | Backend | Chains from DB |
-| 23 | GET | /api/system/health | Both | System health status |
-| — | WS | /ws | Backend | WebSocket connection |
+| # | Method | Route | Description |
+|---|--------|-------|-------------|
+| 1 | GET | /api/market/chains | All chains with metrics |
+| 2 | GET | /api/market/chains/:id | Single chain details |
+| 3 | GET | /api/market/liquidity | Liquidity pool data |
+| 4 | GET | /api/market/ticker | Live ticker feed |
+| 5 | POST | /api/execution/simulate | Simulate route execution |
+| 6 | POST | /api/execution/optimize | Optimize route params |
+| 7 | POST | /api/execution/execute | Execute route order |
+| 8 | GET | /api/execution/orders | List recent orders |
+| 9 | GET | /api/execution/orders/:id | Get order by ID |
+| 10 | GET | /api/settlement/proofs | Settlement proofs |
+| 11 | GET | /api/settlement/verify/:txHash | On-chain verification |
+| 12 | POST | /api/settlement/inspect | Inspect settlement |
+| 13 | GET | /api/routes | Registered routes |
+| 14 | GET | /api/routes/recommend | AI recommendation |
+| 15 | GET | /api/routes/simulate | Route simulation |
+| 16 | POST | /api/routes/compare | Compare two chains |
+| 17 | GET | /api/alerts | All alerts |
+| 18 | GET | /api/alerts/unread | Unread alert count |
+| 19 | PUT | /api/alerts/:id/read | Mark alert read |
+| 20 | POST | /api/alerts | Create alert |
+| 21 | GET | /api/health | Health check |
+| 22 | GET | /api/kpi | Key performance indicators |
+| 23 | GET | /api/chains | Chains from DB (with pools) |
+| 24 | GET | /api/system/health | System health status |
+| — | WS | /ws | WebSocket connection |

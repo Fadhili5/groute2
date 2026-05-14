@@ -4,8 +4,8 @@
 
 ```bash
 # Clone
-git clone https://github.com/ghostroute/terminal.git
-cd ghostroute-terminal
+git clone https://github.com/elonmasai7/groute.git
+cd groute
 
 # Install dependencies
 cd contracts && npm install && cd ..
@@ -30,6 +30,8 @@ cd frontend && npm run dev &
 - Solidity NatSpec documentation
 - Comprehensive test coverage
 - No placeholders or dead code
+- All backend routes must handle null-Prisma gracefully with fallback data
+- Frontend components fetch data via api-client.ts, not direct fetch()
 
 ## Pull Request Process
 

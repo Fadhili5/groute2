@@ -39,19 +39,20 @@ Open `http://localhost:3000` in a browser.
 Browser → Next.js server → layout.tsx (HTML shell) → page.tsx (client JS)
                                                           │
                                                           ├── useWebSocket() starts
-                                                          │   ├── No URL → simulation mode
-                                                          │   │   └── setInterval(8s): random gas updates + alerts
-                                                          │   └── URL → WS connection
+                                                          │   ├── No WS_URL → loads initial data via REST API
+                                                          │   │   (chains, kpis, system health)
+                                                          │   └── URL → WS connection with exponential backoff
                                                           │
                                                           ├── MarketMatrix mounts
-                                                          │   └── fetch /api/market/chains
+                                                          │   └── fetch /api/market/chains via api-client
                                                           │
-                                                          ├── Header reads wallet-store kpis
-                                                          ├── Sidebar reads wallet-store systemHealth
+                                                          ├── Headers reads wallet-store kpis (loaded from /api/kpi)
+                                                          ├── Sidebar reads wallet-store systemHealth (from /api/system/health)
                                                           └── StatusStrip renders ticker from wallet-store
+                                                              (loaded from /api/market/ticker)
 ```
 
-### Step 1.2 — Connect Wallet (Optional in Mock Mode)
+### Step 1.2 — Connect Wallet
 
 Click the wallet button in the header.
 
@@ -141,24 +142,19 @@ An AG Grid table with 6 chains and 9 metrics:
 MarketMatrix mounts
   │
   ├── useEffect fires
-  │   └── fetch("/api/market/chains")
+  │   └── api.getChains()  (via api-client → proxy → backend /api/market/chains)
   │         │
   │         ▼
-  │   frontend/src/app/api/market/chains/route.ts
+  │   Backend Fastify server → prisma.chain.findMany() or FALLBACK_CHAINS
   │         │
-  │         └── GET() → returns hardcoded CHAINS array (6 chains)
-  │               │
-  │               ▼
-  │         setRowData(chains) → AG Grid re-renders
+  │         ▼
+  │   setRowData(chains) → AG Grid re-renders
   │
-  ├── setInterval(30000ms): refetch /api/market/chains
-  │     (simulates live data refresh)
+  ├── setInterval(30000ms): refetch /api/market/chains via api-client
+  │     (30-second polling for live data refresh)
   │
-  └── WebSocket simulation (every 8s):
-        useMarketStore.setState({ chains: chains.map(c => ({...c, gas: randomWalk() })) })
-
-       Note: MarketMatrix uses local rowData state, NOT useMarketStore.chains directly.
-       This means WebSocket gas updates don't visibly affect the grid in mock mode.
+  └── If WS connected: market_update events update individual chain gas/liquidity
+        useMarketStore.setState → but MarketMatrix reads from local rowData state
 ```
 
 **Cell renderers used:**
@@ -224,8 +220,8 @@ LiquidityHeatmap mounts
 **Files:**
 | File | Role |
 |------|------|
-| `frontend/src/components/liquidity-heatmap/LiquidityHeatmap.tsx` | Component + chart rendering |
-| `frontend/src/app/api/market/liquidity/route.ts` | API endpoint (hardcoded) |
+| `backend/src/routes/market.ts` | Backend API endpoint (DB query or fallback) |
+| `frontend/src/lib/api-client.ts` | Typed API client for all backend endpoints |
 
 ---
 
@@ -266,15 +262,14 @@ The AI Solver is always visible in the right sidebar. No action needed — it lo
 
 ```
 AiSolver mounts
-  └── Renders local hardcoded recommendation data
-      (no API calls, no zustand store interaction)
-      - path: "ETH → LayerZero → Arbitrum → Uniswap V3 → USDC"
-      - confidence: 94
-      - bridgeHealth: "99.8% uptime"
-      - alternatives array of 2 alternative routes
+  │
+  ├── setLoading(true)
+  ├── api.getRecommendation() → GET /api/routes/recommend
+  │     └── Backend returns recommended route from DB or fallback
+  │
+  └── Renders: path, confidence, reason, alternatives, bridge health, MEV forecast
+      Falls back to hardcoded defaults if API unavailable
 ```
-
-**Intended future flow:** `GET /api/routes/recommend` → store in `useRouteStore.aiRecommendation` → AiSolver reads from store.
 
 ---
 
@@ -307,9 +302,13 @@ Click the **ROUTES** tab. The Route Visualizer shows the fragment pipeline for t
 ```
 RouteVisualizer mounts
   │
-  ├── useTerminalStore → activeRoute
-  │     ├── If activeRoute is set → render its fragments
-  │     └── If null → use hardcoded SAMPLE_FRAGMENTS
+  ├── No activeRoute in useRouteStore?
+  │     └── setLoading(true)
+  │         └── api.simulateRoute() → GET /api/routes/simulate
+  │             └── Backend returns fragment pipeline
+  │                 └── Cast to RouteFragment[], store in useRouteStore
+  │
+  ├── useRouteStore → activeRoute.fragments
   │
   └── Each fragment shows: type icon, label, duration, cost, status badge
       Fragment types: wallet, split, bridge, swap, liquidity, settlement
@@ -346,27 +345,25 @@ Click **Simulate**.
 ```
 handleSimulate()
   └── setStatus("simulating")
-        └── setTimeout(1500ms):
+        └── api.simulate(getFormParams())
+              └── POST /api/execution/simulate
+                  Body: { sourceAsset, destinationAsset, sourceChain,
+                          destinationChain, amount, privacyMode,
+                          fragmentationMode, slippageTolerance,
+                          bridgePreference, mevGuard }
+                  → Zod validation on backend
+                  → Deterministic cost estimation (gas * amount * fees)
+                  → Redis cache result (TTL: 300s)
+                  → Returns: { id, gas, bridgeFee, slippage, eta, confidence, fragments, route, fee }
+              └── setResult(response)
               └── setStatus("simulated")
-              
-Note: No actual API call is made. The status update is purely local state.
-```
-
-**Intended future flow:**
-```
-POST /api/execution/simulate
-  Body: { sourceAsset, destinationAsset, sourceChain, destinationChain, amount,
-          privacyMode, fragmentationMode, slippageTolerance, bridgePreference, mevGuard }
-  → Zod validation
-  → Redis cache result (TTL: 300s)
-  → Returns: { id, gas, bridgeFee, slippage, eta, confidence, fragments, route, fee }
 ```
 
 ### Step 7.2 — Optimize
 
-Click **Optimize**. Status badge changes to `OPTIMIZING` → after 2s → `OPTIMIZED`.
+Click **Optimize**. Status badge changes to `OPTIMIZING` → once API responds → `OPTIMIZED`.
 
-**Behind the scenes:** Same pattern — local `setTimeout`, no API call.
+**Behind the scenes:** `api.optimize(getFormParams())` → POST /api/execution/optimize with real backend processing.
 
 ### Step 7.3 — Execute
 
@@ -374,14 +371,17 @@ Click **Execute** (enabled after Simulate or Optimize). Status changes to `EXECU
 
 **Behind the scenes:**
 ```
-POST /api/execution/execute
-  Body: same as simulate
-  → Generates mock tx hash (64 random hex chars)
-  → Returns order with status "executing"
-  → In backend: setTimeout(5000ms) → marks completed
-
-Frontend: setTimeout(3000ms) → setStatus("completed")
-Backend:  setTimeout(5000ms) → marks order completed in Redis
+handleExecute()
+  └── setStatus("executing")
+        └── api.execute(getFormParams())
+              └── POST /api/execution/execute
+                  → Generates tx hash
+                  → Redis cache + in-memory Map
+                  → Returns order with status "executing"
+                  → In backend: setTimeout(5000ms) → marks completed
+              └── addOrder(order) to solver-store
+              └── Poll GET /api/execution/orders/:id every 2s
+                  └── When status === "completed" → setStatus("completed")
 ```
 
 ### Form Fields
@@ -403,10 +403,8 @@ Backend:  setTimeout(5000ms) → marks order completed in Redis
 | File | Role |
 |------|------|
 | `frontend/src/components/execution-blotter/ExecutionBlotter.tsx` | Form UI + 3 handlers |
-| `frontend/src/app/api/execution/execute/route.ts` | Execute endpoint |
-| `frontend/src/app/api/execution/simulate/route.ts` | Simulate endpoint |
-| `frontend/src/app/api/execution/optimize/route.ts` | Optimize endpoint |
-| `frontend/src/app/api/execution/orders/route.ts` | Orders list endpoint |
+| `backend/src/routes/execution.ts` | Backend execution endpoints |
+| `frontend/src/lib/api-client.ts` | Typed API client |
 
 ---
 
@@ -498,15 +496,11 @@ Click the **ALERTS** tab. The feed auto-populates with alerts.
 AlertsFeed mounts
   │
   ├── useAlertStore.alerts.length === 0?
-  │     ├── Yes → setAlerts(createInitialAlerts())
-  │     │          (7 pre-generated alerts: mix of types & severities)
+  │     ├── Yes → setLoading(true)
+  │     │       └── api.getAlerts() → GET /api/alerts
+  │     │           └── Backend returns alerts from DB or fallback
+  │     │           └── setAlerts(response.alerts)
   │     └── No → render existing alerts
-  │
-  ├── setInterval(8000ms): auto-generate new alert
-  │     ├── Random type: route_success | mev_event | gas_spike
-  │     ├── Random severity: info | warning
-  │     ├── Random message from template
-  │     └── addAlert(newAlert) → prepend to store array (capped at 100)
   │
   ├── Filter dropdown: All | route_success | mev_event | bridge_outage | gas_spike | relayer_failure
   │
@@ -680,15 +674,9 @@ Server confirms → { type: "subscribed", channel: "market" }
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Simulation Mode (No WS URL)
+### REST Fallback (No WS URL)
 
-If `NEXT_PUBLIC_WS_URL` is not set, the `useWebSocket` hook runs a client-side simulation:
-
-```typescript
-setInterval(8000ms):
-  1. Update chain gas prices in useMarketStore (random walk ±2%)
-  2. 30% chance: generate random alert and add to useAlertStore
-```
+If `NEXT_PUBLIC_WS_URL` is not set, the `useWebSocket` hook loads initial data once via REST API calls (`api.getChains()`, `api.getKpi()`, `api.getSystemHealth()`). No simulation or fake data generation occurs. Components rely on their own polling intervals (e.g., MarketMatrix refetches every 30s).
 
 ---
 
