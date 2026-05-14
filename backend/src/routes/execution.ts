@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { v4 as uuid } from "uuid";
+import { publish } from "../websocket/handler.js";
 
 interface RouteOptions {
   prisma: PrismaClient | null;
@@ -120,26 +121,68 @@ export async function executionRoutes(app: FastifyInstance, opts: RouteOptions) 
   app.post("/execute", async (request, reply) => {
     const data = simulateSchema.parse(request.body);
 
+    const orderId = uuid();
+    const txHash = generateOrderId();
+    const fragments = estimateFragments(data.amount, data.fragmentationMode);
+
     const order = {
-      id: uuid(),
+      id: orderId,
       ...data,
       status: "executing",
-      txHash: generateOrderId(),
+      txHash,
+      fragments,
+      progress: 0,
+      stage: "submitting",
       timestamp: Date.now(),
     };
 
-    ORDERS.set(order.id, order);
-    if (opts.redis) {
-      await opts.redis.setex(`execution:${order.id}`, 3600, JSON.stringify(order));
-    }
-
-    setTimeout(async () => {
-      order.status = "completed";
-      ORDERS.set(order.id, order);
+    const saveOrder = async (updated: any) => {
+      ORDERS.set(updated.id, updated);
       if (opts.redis) {
-        await opts.redis.setex(`execution:${order.id}`, 3600, JSON.stringify(order));
+        await opts.redis.setex(`execution:${updated.id}`, 3600, JSON.stringify(updated));
       }
-    }, 5000);
+    };
+
+    const emitStatus = (stage: string, status: string, progress: number, extra: Record<string, unknown> = {}) => {
+      publish("execution", {
+        type: "execution_update",
+        channel: "execution",
+        data: { id: orderId, stage, status, progress, txHash, ...extra },
+      });
+    };
+
+    await saveOrder(order);
+    emitStatus("submitting", "executing", 0);
+
+    // Real-time multi-stage execution simulation
+    const stages = [
+      { delay: 800, stage: "validating", status: "executing", progress: 10, label: "Validating route parameters" },
+      { delay: 1200, stage: "quoting", status: "executing", progress: 25, label: "Fetching quotes from DEX aggregators" },
+      { delay: 1000, stage: "splitting", status: "executing", progress: 40, label: `Splitting order into ${fragments} fragments` },
+      { delay: 1500, stage: "bridging", status: "executing", progress: 60, label: `Bridging via ${data.bridgePreference}` },
+      { delay: 1000, stage: "swapping", status: "executing", progress: 80, label: "Executing DEX swaps" },
+      { delay: 1000, stage: "settling", status: "executing", progress: 90, label: "Submitting settlement proof" },
+      { delay: 800, stage: "complete", status: "completed", progress: 100, label: "Order settled successfully" },
+    ];
+
+    let totalDelay = 0;
+    for (const s of stages) {
+      totalDelay += s.delay;
+      const stageConfig = s;
+      setTimeout(async () => {
+        order.status = stageConfig.status;
+        order.stage = stageConfig.stage;
+        order.progress = stageConfig.progress;
+        emitStatus(stageConfig.stage, stageConfig.status, stageConfig.progress, { label: stageConfig.label });
+
+        if (stageConfig.status === "completed") {
+          order.status = "completed";
+          await saveOrder(order);
+        } else {
+          await saveOrder(order);
+        }
+      }, totalDelay);
+    }
 
     return order;
   });

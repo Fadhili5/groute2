@@ -59,6 +59,10 @@ export interface ExecutionOrder {
   mevGuard: "on" | "off";
   status: "draft" | "simulated" | "optimized" | "executing" | "completed" | "failed";
   timestamp: number;
+  progress?: number;
+  stage?: string;
+  txHash?: string;
+  fragments?: number;
 }
 
 export interface LiquidityPool {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useMarketStore, useAlertStore, useWalletStore } from "@/stores";
+import { useMarketStore, useAlertStore, useWalletStore, useSolverStore } from "@/stores";
 import { api } from "@/lib/api-client";
 
 interface WSMessage {
@@ -18,6 +18,7 @@ export function useWebSocket(url?: string) {
   const { setChains } = useMarketStore();
   const { addAlert } = useAlertStore();
   const { setKpis, setSystemHealth } = useWalletStore();
+  const { updateOrder } = useSolverStore();
 
   const loadInitialData = async () => {
     try {
@@ -53,6 +54,8 @@ export function useWebSocket(url?: string) {
         ws.onopen = () => {
           retryCountRef.current = 0;
           loadInitialData();
+          // Subscribe to execution channel for real-time order updates
+          ws.send(JSON.stringify({ type: "subscribe", channel: "execution" }));
         };
 
         ws.onmessage = (event) => {
@@ -82,6 +85,9 @@ export function useWebSocket(url?: string) {
               case "block_update":
                 setSystemHealth({ ...useWalletStore.getState().systemHealth, blockHeight: msg.data });
                 break;
+              case "execution_update":
+                updateOrder(msg.data.id, { status: msg.data.status as any, progress: msg.data.progress });
+                break;
             }
           } catch { /* ignore parse errors */ }
         };
@@ -104,5 +110,5 @@ export function useWebSocket(url?: string) {
       clearTimeout(reconnectRef.current);
       wsRef.current?.close();
     };
-  }, [url, setChains, addAlert, setKpis, setSystemHealth]);
+  }, [url, setChains, addAlert, setKpis, setSystemHealth, updateOrder]);
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useSolverStore } from "@/stores";
-import { PlayCircle, Search, Zap, Send, Loader2 } from "lucide-react";
+import { Search, Zap, Send, Loader2 } from "lucide-react";
 
 const ASSETS = ["USDC", "USDT", "ETH", "BTC", "SOL", "AVAX"];
 const CHAINS = ["Ethereum", "Arbitrum", "Base", "Solana", "Avalanche", "BNB Chain"];
@@ -22,9 +22,27 @@ export function ExecutionBlotter() {
   const [bridge, setBridge] = useState("LayerZero");
   const [mevGuard, setMevGuard] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState("");
   const [result, setResult] = useState<any>(null);
   const loadingRef = useRef(false);
-  const { addOrder } = useSolverStore();
+  const orderIdRef = useRef<string | null>(null);
+  const { orders, addOrder, updateOrder } = useSolverStore();
+
+  const activeOrder = orderIdRef.current ? orders.find((o) => o.id === orderIdRef.current) : null;
+
+  useEffect(() => {
+    if (activeOrder && activeOrder.status === "completed") {
+      setStatus("completed");
+      setProgress(100);
+      setResult((prev: any) => ({ ...prev, order: activeOrder }));
+      loadingRef.current = false;
+      orderIdRef.current = null;
+    } else if (activeOrder && status === "executing") {
+      setProgress(activeOrder.progress || 0);
+      setStage(activeOrder.stage || "");
+    }
+  }, [activeOrder, status]);
 
   const getFormParams = () => ({
     sourceAsset,
@@ -72,22 +90,33 @@ export function ExecutionBlotter() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setStatus("executing");
+    setProgress(0);
+    setStage("submitting");
     try {
       const res = await api.execute(getFormParams());
+      orderIdRef.current = res.id;
       setResult((prev: any) => ({ ...prev, order: res }));
       addOrder(res);
-      // Poll for completion
+
+      // Fallback polling in case WS is not connected
       const check = setInterval(async () => {
         try {
           const order = await api.getOrder(res.id);
           if (order.status === "completed") {
             setStatus("completed");
+            setProgress(100);
+            setStage("complete");
             setResult((prev: any) => ({ ...prev, order }));
+            updateOrder(order.id, { status: "completed", progress: 100 });
             clearInterval(check);
             loadingRef.current = false;
+            orderIdRef.current = null;
+          } else if (order.stage) {
+            setProgress(order.progress || 0);
+            setStage(order.stage || "");
           }
         } catch { clearInterval(check); loadingRef.current = false; }
-      }, 2000);
+      }, 1000);
     } catch {
       setStatus(null);
       loadingRef.current = false;
@@ -153,7 +182,23 @@ export function ExecutionBlotter() {
           <ToggleField label="MEV Guard" value={mevGuard} onChange={setMevGuard} />
         </div>
 
-        {result && (
+        {/* Real-time progress bar */}
+        {status === "executing" && progress > 0 && (
+          <div className="col-span-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-2xs text-surface-500 uppercase tracking-wider">{stage || "Processing"}</span>
+              <span className="text-2xs font-mono text-matrix-accent">{progress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-surface-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-matrix-accent rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {result && !progress && (
           <div className="col-span-2 bg-matrix-bg border border-surface-800 rounded-sm p-2 space-y-1">
             <div className="text-2xs text-surface-500">Route: {result.route || result.optimizedRoute}</div>
             {result.gas && <div className="text-2xs text-surface-400">Gas: {typeof result.gas === 'number' ? `$${result.gas.toFixed(4)}` : result.gas}</div>}
@@ -161,9 +206,21 @@ export function ExecutionBlotter() {
             {result.confidence && <div className="text-2xs text-matrix-green">Confidence: {result.confidence}%</div>}
             {result.eta && <div className="text-2xs text-surface-400">ETA: {result.eta}</div>}
             {result.savings && <div className="text-2xs text-matrix-green">Savings: {result.savings}</div>}
-            {result.order?.txHash && (
+            {result.order?.txHash && progress === 0 && (
               <div className="text-2xs font-mono text-matrix-accent">Tx: {result.order.txHash.slice(0, 18)}...{result.order.txHash.slice(-6)}</div>
             )}
+          </div>
+        )}
+
+        {/* Completed order details */}
+        {status === "completed" && activeOrder && (
+          <div className="col-span-2 bg-matrix-bg border border-matrix-green/30 rounded-sm p-2 space-y-1">
+            <div className="text-2xs text-matrix-green font-semibold">Order Completed</div>
+            <div className="text-2xs text-surface-400">Route: {activeOrder.sourceAsset} {activeOrder.sourceChain} to {activeOrder.destinationAsset} {activeOrder.destinationChain}</div>
+            {activeOrder.txHash && (
+              <div className="text-2xs font-mono text-matrix-accent">Tx: {activeOrder.txHash.slice(0, 18)}...{activeOrder.txHash.slice(-6)}</div>
+            )}
+            <div className="text-2xs text-surface-500">Amount: {activeOrder.amount} {activeOrder.sourceAsset}</div>
           </div>
         )}
 

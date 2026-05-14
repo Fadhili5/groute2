@@ -25,7 +25,7 @@ export function setRedisClient(redis: Redis | null) {
   }
 }
 
-function broadcast(channel: string, event: any) {
+export function publish(channel: string, event: Record<string, unknown>) {
   const payload = JSON.stringify(event);
   clients.forEach((client) => {
     if (client.ws.readyState === WebSocket.OPEN) {
@@ -34,6 +34,10 @@ function broadcast(channel: string, event: any) {
       }
     }
   });
+}
+
+function broadcast(channel: string, event: any) {
+  publish(channel, event);
 }
 
 export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
