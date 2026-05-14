@@ -119,6 +119,66 @@ const DEMO_SOLVERS: Solver[] = [
 
 DEMO_SOLVERS.forEach((s) => SOLVERS.set(s.id, s));
 
+const DEMO_AUCTIONS: Auction[] = [
+  {
+    id: "auction-001",
+    intentId: "0xabc123def456",
+    tokenIn: "USDC",
+    tokenOut: "ETH",
+    amountIn: 75000,
+    startPrice: 150,
+    currentPrice: 145,
+    endPrice: 120,
+    deadline: Date.now() + 300000,
+    state: "Bidding",
+    winner: null,
+    finalPrice: null,
+    settledAt: null,
+  },
+  {
+    id: "auction-002",
+    intentId: "0x789xyz123abc",
+    tokenIn: "WBTC",
+    tokenOut: "SOL",
+    amountIn: 500000,
+    startPrice: 200,
+    currentPrice: 185,
+    endPrice: 160,
+    deadline: Date.now() + 180000,
+    state: "Bidding",
+    winner: null,
+    finalPrice: null,
+    settledAt: null,
+  },
+  {
+    id: "auction-003",
+    intentId: "0xdef456789abc",
+    tokenIn: "ETH",
+    tokenOut: "ARB",
+    amountIn: 25000,
+    startPrice: 85,
+    currentPrice: 82,
+    endPrice: 68,
+    deadline: Date.now() + 600000,
+    state: "Bidding",
+    winner: null,
+    finalPrice: null,
+    settledAt: null,
+  },
+];
+
+const DEMO_BIDS: Bid[] = [
+  { id: "bid-001", auctionId: "auction-001", solver: "0x742d35Cc6634C0532925a3b844Bc9e7595f8E1a1", price: 145, estimatedGas: 120000, executionTime: 2, routeId: "0xroute1", state: "Submitted", submittedAt: Date.now() - 60000 },
+  { id: "bid-002", auctionId: "auction-001", solver: "0x9B3a54D092fF4B4f7aF8C4f6E4D9a2C3b5e1f8A2", price: 148, estimatedGas: 110000, executionTime: 3, routeId: "0xroute2", state: "Submitted", submittedAt: Date.now() - 45000 },
+  { id: "bid-003", auctionId: "auction-002", solver: "0xA1b2C3d4E5F6789012345678901234567890AbCd", price: 185, estimatedGas: 150000, executionTime: 4, routeId: "0xroute3", state: "Submitted", submittedAt: Date.now() - 30000 },
+  { id: "bid-004", auctionId: "auction-003", solver: "0xDeF4567890123456789012345678901234567890", price: 82, estimatedGas: 90000, executionTime: 1, routeId: "0xroute4", state: "Submitted", submittedAt: Date.now() - 15000 },
+];
+
+DEMO_AUCTIONS.forEach((a) => {
+  AUCTIONS.set(a.id, a);
+  BIDS.set(a.id, DEMO_BIDS.filter((b) => b.auctionId === a.id));
+});
+
 export async function solverRoutes(app: FastifyInstance, opts: RouteOptions) {
   app.get("/solvers", async (request, reply) => {
     const solvers = Array.from(SOLVERS.values()).filter((s) => s.isActive);
