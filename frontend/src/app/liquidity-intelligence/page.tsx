@@ -9,14 +9,16 @@ import { Watchlist } from "@/components/watchlist/Watchlist";
 export default function LiquidityIntelligencePage() {
   return (
     <TerminalShell>
-      <div className="grid grid-cols-12 gap-2 h-full">
-        <div className="col-span-7 min-h-0">
-          <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>
+      <div className="flex flex-col gap-2 h-full">
+        <div className="flex gap-2 flex-[3] min-h-0">
+          <div className="flex-[3] min-w-0">
+            <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>
+          </div>
+          <div className="flex-[2] min-w-0">
+            <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>
+          </div>
         </div>
-        <div className="col-span-5 min-h-0">
-          <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>
-        </div>
-        <div className="col-span-12 min-h-0">
+        <div className="flex-shrink-0 max-h-48">
           <ErrorBoundary name="Watchlist"><Watchlist /></ErrorBoundary>
         </div>
       </div>

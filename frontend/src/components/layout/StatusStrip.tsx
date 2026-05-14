@@ -2,19 +2,32 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api-client";
 import type { TickerItem } from "@/types";
 
 const DEFAULT_TICKER: TickerItem[] = [
   { type: "chain", message: "ETH: block 19876543 | gas 12.4 gwei" },
   { type: "chain", message: "ARB: block 187654321 | gas 0.08 gwei" },
-  { type: "route", message: "Route 0x7f3c completed: 50000 USDC ARB \u2192 ETH (12.4s)" },
+  { type: "route", message: "Route 0x7f3c completed: 50000 USDC ARB to ETH (12.4s)" },
   { type: "alert", message: "MEV protection engaged on Ethereum mempool", severity: "warning" },
   { type: "bridge", message: "LayerZero: 3 active relays | 0 pending" },
   { type: "gas", message: "Base gas spike: 3.2 gwei (+240%)" },
 ];
 
 export function StatusStrip() {
-  const [items] = useState<TickerItem[]>(DEFAULT_TICKER);
+  const [items, setItems] = useState<TickerItem[]>(DEFAULT_TICKER);
+
+  useEffect(() => {
+    api.getTicker()
+      .then((res) => { if (res.items?.length) setItems(res.items); })
+      .catch(() => {});
+    const id = setInterval(() => {
+      api.getTicker()
+        .then((res) => { if (res.items?.length) setItems(res.items); })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 h-status bg-surface-900 border-t border-surface-800 z-50 flex items-center overflow-hidden">

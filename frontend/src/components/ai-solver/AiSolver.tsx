@@ -32,12 +32,12 @@ export function AiSolver() {
 
   if (loading) {
     return (
-      <div className="panel h-full flex flex-col">
+      <div className="panel flex flex-col">
         <div className="panel-header flex-shrink-0">
           <span className="panel-title">AI Solver</span>
           <Sparkles className="w-3 h-3 text-matrix-yellow" />
         </div>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center py-4">
           <Loader2 className="w-4 h-4 animate-spin text-surface-500" />
         </div>
       </div>
@@ -45,13 +45,13 @@ export function AiSolver() {
   }
 
   return (
-    <div className="panel h-full flex flex-col">
+    <div className="panel flex flex-col">
       <div className="panel-header flex-shrink-0">
         <span className="panel-title">AI Solver</span>
         <Sparkles className="w-3 h-3 text-matrix-yellow" />
       </div>
 
-      <div className="flex-1 p-3 overflow-y-auto space-y-3">
+      <div className="p-3 space-y-3">
         <div className="panel-header !px-2 !py-1.5 !bg-matrix-bg !border-surface-800 rounded-sm">
           <span className="text-2xs text-surface-500 uppercase tracking-wider">Recommended Path</span>
           <span className={cn(

@@ -12,7 +12,6 @@ import { CommandTerminal } from "@/components/command-terminal/CommandTerminal";
 import { AlertsFeed } from "@/components/alerts-feed/AlertsFeed";
 import { Watchlist } from "@/components/watchlist/Watchlist";
 import { TerminalShell } from "@/components/layout/TerminalShell";
-import { useWebSocket } from "@/hooks/useWebSocket";
 
 const TABS = [
   { id: "market", label: "MARKET", module: "MarketMatrix" },
@@ -30,7 +29,6 @@ const SIDEBAR_MODULES = ["AiSolver"];
 export default function Home() {
   const [activeTab, setActiveTab] = useState("market");
   const [isMobile, setIsMobile] = useState(false);
-  useWebSocket(process.env.NEXT_PUBLIC_WS_URL);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -107,20 +105,18 @@ export default function Home() {
             ))}
           </nav>
           
-          <div className="flex-1 min-h-0 panel">
-            <div className="h-full p-4">
-              <ErrorBoundary name={activeTab}>
-                {renderModule(TABS.find(t => t.id === activeTab)?.module || "MarketMatrix")}
-              </ErrorBoundary>
-            </div>
+          <div className="flex-1 min-h-0">
+            <ErrorBoundary name={activeTab}>
+              {renderModule(TABS.find(t => t.id === activeTab)?.module || "MarketMatrix")}
+            </ErrorBoundary>
           </div>
         </div>
 
         <div className="w-80 flex flex-col gap-4 flex-shrink-0">
-          <div className="panel p-4" style={{ flex: "0 0 auto" }}>
+          <div className="flex-shrink-0">
             <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
           </div>
-          <div className="panel p-4 flex-1 min-h-0">
+          <div className="flex-1 min-h-0">
             <ErrorBoundary name="Watchlist"><Watchlist /></ErrorBoundary>
           </div>
         </div>

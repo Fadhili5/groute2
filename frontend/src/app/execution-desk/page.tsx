@@ -13,11 +13,13 @@ export default function ExecutionDeskPage() {
         <div className="col-span-7 min-h-0">
           <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>
         </div>
-        <div className="col-span-5 min-h-0">
-          <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>
-        </div>
-        <div className="col-span-12 min-h-0">
-          <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
+        <div className="col-span-5 min-h-0 flex flex-col gap-2">
+          <div className="flex-1 min-h-0">
+            <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>
+          </div>
+          <div className="flex-shrink-0 max-h-64">
+            <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
+          </div>
         </div>
       </div>
     </TerminalShell>

@@ -1,10 +1,9 @@
 @import "ag-grid-community/styles/ag-grid.css";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
   * {
@@ -26,7 +25,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-800;
+    @apply bg-surface-800 rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -44,42 +43,18 @@
   }
 
   .panel-title {
-    @apply text-xs font-medium text-surface-500 uppercase;
+    @apply text-xs font-medium text-surface-500 uppercase tracking-wider;
   }
 
   .panel-badge {
     @apply text-2xs px-1.5 py-0.5 rounded font-mono font-medium;
   }
 
-  .kpi-value {
-    @apply text-sm font-mono font-semibold text-surface-200;
-  }
-
-  .kpi-label {
-    @apply text-2xs text-surface-500 uppercase tracking-wider;
-  }
-
-  .status-dot {
-    @apply w-1.5 h-1.5 rounded-full inline-block;
-  }
-
-  .status-dot--online {
-    @apply bg-matrix-green;
-  }
-
-  .status-dot--degraded {
-    @apply bg-matrix-yellow;
-  }
-
-  .status-dot--offline {
-    @apply bg-matrix-red;
-  }
-
   .btn {
     @apply px-3 py-1.5 text-xs font-medium transition-all duration-150
            border border-surface-700 bg-surface-800 text-surface-300
            hover:bg-surface-700 hover:text-surface-200
-           disabled:opacity-50 disabled:cursor-not-allowed;
+           disabled:opacity-50 disabled:cursor-not-allowed rounded-sm;
   }
 
   .btn-primary {
@@ -87,11 +62,11 @@
   }
 
   .btn-success {
-    @apply btn border-surface-600 bg-surface-800 text-surface-300 hover:bg-surface-700;
+    @apply btn border-matrix-green/30 bg-matrix-green/10 text-matrix-green hover:bg-matrix-green/20;
   }
 
   .btn-danger {
-    @apply btn border-surface-600 bg-surface-800 text-surface-300 hover:bg-surface-700;
+    @apply btn border-matrix-red/30 bg-matrix-red/10 text-matrix-red hover:bg-matrix-red/20;
   }
 
   .input {
@@ -105,20 +80,12 @@
     @apply input appearance-none cursor-pointer;
   }
 
-  .table-cell {
-    @apply text-xs font-mono text-surface-300;
-  }
-
   .glow-accent {
-    box-shadow: inset 0 1px 0 rgba(34, 211, 238, 0.1);
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.15), inset 0 1px 0 rgba(34, 211, 238, 0.1);
   }
 
   .glow-green {
-    box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.1);
-  }
-
-  .glow-purple {
-    box-shadow: inset 0 1px 0 rgba(139, 92, 246, 0.1);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(16, 185, 129, 0.1);
   }
 }
 
@@ -137,7 +104,7 @@
   }
 }
 
-/* AG Grid overrides - simplified for raw utilitarian look */
+/* AG Grid overrides */
 .ag-theme-ghost {
   --ag-background-color: transparent !important;
   --ag-header-background-color: #111827 !important;
@@ -166,37 +133,21 @@
 .ag-theme-ghost .ag-row { border-bottom: 1px solid rgba(55, 65, 81, 0.2) !important; }
 .ag-theme-ghost .ag-row:hover { background-color: rgba(16, 185, 129, 0.03) !important; }
 .ag-theme-ghost .ag-cell { line-height: 32px !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
-.ag-theme-ghost .ag-floating-filter { background-color: #0b0f1a !important; border-bottom: 1px solid #374151 !important; }
-.ag-theme-ghost .ag-floating-filter-input { background-color: #000000cc !important; border: 1px solid #374151 !important; color: #9ca3af !important; font-size: 10px !important; font-family: 'JetBrains Mono', monospace !important; height: 20px !important; padding: 0 4px !important; }
-.ag-theme-ghost .ag-floating-filter-input:focus { border-color: #10b981 !important; outline: none !important; }
-.ag-theme-ghost .ag-header-cell { font-size: 10px !important; font-weight: 500 !important; text-transform: none !important; }
-.ag-theme-ghost .ag-header-cell-text { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
 .ag-theme-ghost .ag-body-viewport { overflow-x: auto !important; overflow-y: auto !important; }
-.ag-theme-ghost .ag-center-cols-container { min-width: 100% !important; }
 
 /* xterm overrides */
-.xterm {
-  height: 100%;
-  padding: 4px;
-}
+.xterm { height: 100%; padding: 4px; }
+.xterm-viewport { scrollbar-width: thin !important; }
 
-.xterm-viewport {
-  scrollbar-width: thin !important;
-}
-
-/* Recharts overrides - simplified for raw utilitarian look */
+/* Recharts overrides */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
   stroke: #374151 !important;
   stroke-dasharray: 2 2;
 }
-
 .recharts-text {
   fill: #9ca3af !important;
   font-size: 10px !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
-
-.recharts-tooltip-wrapper {
-  outline: none !important;
-}
+.recharts-tooltip-wrapper { outline: none !important; }
