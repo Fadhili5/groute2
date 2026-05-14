@@ -1,152 +1,1567 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "postgresqlExtensions"]
+}
+
+generator dbml {
+  provider = "prisma-dbml-generator"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext, pgcrypto, timescaledb]
 }
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum ChainStatus {
+  healthy
+  degraded
+  paused
+  halted
+}
+
+enum RouteStatus {
+  active
+  inactive
+  degraded
+  paused
+  deprecated
+}
+
+enum IntentState {
+  created
+  quoted
+  auctioning
+  executing
+  settled
+  failed
+  expired
+  cancelled
+}
+
+enum BidState {
+  pending
+  accepted
+  rejected
+  withdrawn
+  expired
+}
+
+enum SettlementState {
+  pending
+  submitted
+  confirmed
+  finalized
+  failed
+  disputed
+}
+
+enum PrivacyLevel {
+  standard
+  private
+  stealth
+  shielded
+}
+
+enum Severity {
+  info
+  warning
+  critical
+  emergency
+}
+
+enum RelayerStatus {
+  active
+  inactive
+  jailed
+  slashed
+  retired
+}
+
+enum ExecutionFragmentState {
+  pending
+  routing
+  swapping
+  bridging
+  settling
+  completed
+  failed
+  rerouted
+}
+
+enum AuctionState {
+  pending
+  open
+  closed
+  awarded
+  cancelled
+}
+
+enum ZkProofState {
+  generated
+  submitted
+  verified
+  failed
+  anchored
+}
+
+enum ConsensusRoundState {
+  started
+  awaiting_votes
+  finalized
+  failed
+}
+
+enum ScheduleTaskState {
+  active
+  paused
+  completed
+  failed
+  cancelled
+}
+
+enum ApiKeyPermission {
+  read
+  write
+  admin
+  restricted
+}
+
+enum WebhookEventType {
+  execution_completed
+  settlement_finalized
+  anomaly_detected
+  relayer_status_change
+  position_liquidated
+  route_deprecated
+}
+
+enum StrategyConditionOperator {
+  gt
+  gte
+  lt
+  lte
+  eq
+  neq
+  contains
+  in_range
+}
+
+// =============================================================================
+// USER & MULTI-WALLET (Upgrade 10)
+// =============================================================================
+
+model User {
+  id         String   @id @default(uuid()) @map("id")
+  address    String   @unique @map("address")
+  email      String?  @unique @map("email")
+  role       String   @default("user") @map("role")
+  tier       String   @default("free") @map("tier")
+  permissions Json?    @default("[]") @map("permissions")
+  metadata   Json?    @map("metadata")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  intents             Intent[]
+  apiKeys             ApiKey[]
+  webhooks            IntegrationWebhook[]
+  workspaces          WorkspaceConfig[]
+  savedLayouts        SavedLayout[]
+  strategies          RouteStrategy[]
+  positions           Position[]
+  approvalRequests    ApprovalWorkflow[]      @relation("ApprovalRequester")
+  approvalActions     ApprovalWorkflow[]      @relation("ApprovalApprover")
+  aiChats             AiChat[]
+  permissionAudits    PermissionAudit[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model PermissionPolicy {
+  id        String   @id @default(uuid()) @map("id")
+  name      String   @unique @map("name")
+  resource  String   @map("resource")
+  effect    String   @map("effect") // allow | deny
+  priority  Int      @default(0) @map("priority")
+  conditions Json?   @map("conditions")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([resource, effect])
+  @@map("permission_policies")
+}
+
+model ApprovalWorkflow {
+  id           String    @id @default(uuid()) @map("id")
+  requesterId  String    @map("requester_id")
+  approverId   String?   @map("approver_id")
+  action       String    @map("action")
+  params       Json      @map("params")
+  state        String    @default("pending") @map("state") // pending | approved | rejected | expired
+  reason       String?   @map("reason")
+  expiresAt    DateTime? @map("expires_at")
+  decidedAt    DateTime? @map("decided_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  requester User @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  approver  User? @relation("ApprovalApprover", fields: [approverId], references: [id])
+
+  @@index([requesterId, state])
+  @@index([approverId, state])
+  @@map("approval_workflows")
+}
+
+// =============================================================================
+// CHAIN (Enhanced - Upgrade 20)
+// =============================================================================
 
 model Chain {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  shortName String
-  chainId   Int      @unique
-  rpcUrl    String?
-  status    String   @default("healthy")
-  liquidity Float    @default(0)
-  spread    Float    @default(0)
-  gas       Float    @default(0)
-  bridgeFee Float    @default(0.05)
-  slippage  Float    @default(0.01)
-  latency   Int      @default(0)
-  privacy   Int      @default(50)
-  mev       Int      @default(50)
-  eta       String   @default("0s")
+  id              String      @id @default(uuid()) @map("id")
+  name            String      @unique @map("name")
+  shortName       String      @map("short_name")
+  chainId         Int         @unique @map("chain_id")
+  rpcUrl          String?     @map("rpc_url")
+  wsUrl           String?     @map("ws_url")
+  explorerUrl     String?     @map("explorer_url")
+  status          ChainStatus @default(healthy) @map("status")
+  liquidity       Float       @default(0) @map("liquidity")
+  spread          Float       @default(0) @map("spread")
+  gas             Float       @default(0) @map("gas")
+  bridgeFee       Float       @default(0.05) @map("bridge_fee")
+  slippage        Float       @default(0.01) @map("slippage")
+  latency         Int         @default(0) @map("latency")
+  privacy         Int         @default(50) @map("privacy")
+  mev             Int         @default(50) @map("mev")
+  eta             String      @default("0s") @map("eta")
+  blockTime       Float?      @map("block_time")
+  nativeCurrency  String?     @default("ETH") @map("native_currency")
+  decimals        Int?        @default(18) @map("decimals")
+  isTestnet       Boolean     @default(false) @map("is_testnet")
+  isDeprecated    Boolean     @default(false) @map("is_deprecated")
+  metadata        Json?       @map("metadata")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  sourceRoutes     Route[]        @relation("SourceChain")
-  destRoutes       Route[]        @relation("DestChain")
-  liquidityPools   LiquidityPool[]
-  sourceSettlements Settlement[]  @relation("SettlementSource")
-  destSettlements   Settlement[]  @relation("SettlementDest")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  sourceRoutes        Route[]              @relation("SourceChain")
+  destRoutes          Route[]              @relation("DestChain")
+  liquidityPools      LiquidityPool[]
+  sourceSettlements   Settlement[]         @relation("SettlementSource")
+  destSettlements     Settlement[]         @relation("SettlementDest")
+  encryptedTxs        EncryptedTx[]
+  graphNodes          GraphNode[]
+  allocationRules     AllocationRule[]
+  liquidityForecasts  LiquidityForecast[]
+  gasPriceHistory     GasPriceHistory[]
+
+  @@index([status])
+  @@index([chainId])
+  @@map("chains")
 }
 
+// =============================================================================
+// ROUTE (Enhanced - Upgrade 15)
+// =============================================================================
+
 model Route {
-  id            String   @id @default(uuid())
-  name          String
-  sourceChainId String
-  destChainId   String
-  maxAmount     Float
-  minAmount     Float
-  avgLatency    Float    @default(0)
-  successRate   Float    @default(100)
-  totalVolume   Float    @default(0)
-  totalExecs    Int      @default(0)
-  status        String   @default("active")
+  id              String      @id @default(uuid()) @map("id")
+  name            String      @map("name")
+  sourceChainId   String      @map("source_chain_id")
+  destChainId     String      @map("dest_chain_id")
+  maxAmount       Float       @map("max_amount")
+  minAmount       Float       @map("min_amount")
+  avgLatency      Float       @default(0) @map("avg_latency")
+  successRate     Float       @default(100) @map("success_rate")
+  totalVolume     Float       @default(0) @map("total_volume")
+  totalExecs      Int         @default(0) @map("total_execs")
+  status          RouteStatus @default(active) @map("status")
+  category        String?     @map("category")
+  tags            String[]    @map("tags")
+  bridges         String      @default("[]") @map("bridges")
+  dexes           String      @default("[]") @map("dexes")
+  costModel       Json?       @map("cost_model")
+  riskProfile     Json?       @map("risk_profile")
+  version         Int         @default(1) @map("version")
+  deprecatedAt    DateTime?   @map("deprecated_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
   sourceChain Chain  @relation("SourceChain", fields: [sourceChainId], references: [id])
   destChain   Chain  @relation("DestChain", fields: [destChainId], references: [id])
-  bridges     String @default("[]")
-  dexes       String @default("[]")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  settlements           Settlement[]
+  pathHistory           PathHistory[]
+  rerouteEvents         RerouteEvent[]
+  strategyExecutionLogs StrategyExecutionLog[]
+  performanceHistory    RoutePerformanceHistory[]
+
+  @@index([sourceChainId, destChainId])
+  @@index([status])
+  @@index([totalVolume])
+  @@index([successRate, avgLatency])
+  @@map("routes")
 }
 
-model Intent {
-  id              String   @id @default(uuid())
-  userId          String
-  tokenIn         String
-  tokenOut        String
-  amountIn        Float
-  minAmountOut    Float
-  sourceChainId   String
-  destChainId     String
-  privacyLevel    String   @default("standard")
-  fragmented      Boolean  @default(false)
-  state           String   @default("created")
+// =============================================================================
+// INTENT EXECUTION (Upgrade 1)
+// =============================================================================
 
-  fragments IntentFragment[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Intent {
+  id              String      @id @default(uuid()) @map("id")
+  userId          String      @map("user_id")
+  tokenIn         String      @map("token_in")
+  tokenOut        String      @map("token_out")
+  amountIn        Float       @map("amount_in")
+  minAmountOut    Float       @map("min_amount_out")
+  sourceChainId   String      @map("source_chain_id")
+  destChainId     String      @map("dest_chain_id")
+  privacyLevel    PrivacyLevel @default(standard) @map("privacy_level")
+  fragmented      Boolean     @default(false) @map("fragmented")
+  state           IntentState @default(created) @map("state")
+  slippageTolerance Float?    @default(0.01) @map("slippage_tolerance")
+  deadline        DateTime?   @map("deadline")
+  metadata        Json?       @map("metadata")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user            User?               @relation(fields: [userId], references: [id])
+  fragments       IntentFragment[]
+  bids            SolverBid[]
+  auction         Auction?
+  executionReport AiExecutionReport?
+  executionSnapshot ExecutionSnapshot[]
+  rerouteEvents   RerouteEvent[]
+  strategyLogs    StrategyExecutionLog[]
+
+  @@index([userId])
+  @@index([state])
+  @@index([sourceChainId, destChainId])
+  @@index([createdAt])
+  @@map("intents")
 }
 
 model IntentFragment {
-  id        String @id @default(uuid())
-  intentId  String
-  token     String
-  amount    Float
-  targetDex String
-  settled   Boolean @default(false)
+  id        String               @id @default(uuid()) @map("id")
+  intentId  String               @map("intent_id")
+  token     String               @map("token")
+  amount    Float                @map("amount")
+  targetDex String               @default("") @map("target_dex")
+  state     ExecutionFragmentState @default(pending) @map("state")
+  routeId   String?              @map("route_id")
+  settled   Boolean              @default(false) @map("settled")
+  txHash    String?              @map("tx_hash")
+  metadata  Json?                @map("metadata")
 
-  intent Intent @relation(fields: [intentId], references: [id])
+  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  traces FragmentTrace[]
+
+  @@index([intentId])
+  @@index([state])
+  @@index([routeId])
+  @@map("intent_fragments")
 }
 
+model SolverBid {
+  id        String   @id @default(uuid()) @map("id")
+  intentId  String   @map("intent_id")
+  solverId  String   @map("solver_id")
+  amount    Float    @map("amount")
+  fee       Float    @map("fee")
+  tokenOut  Float?   @map("token_out")
+  deadline  DateTime? @map("deadline")
+  state     BidState @default(pending) @map("state")
+  signature String?  @map("signature")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  solver SolverProfile? @relation(fields: [solverId], references: [id])
+
+  @@index([intentId, state])
+  @@index([solverId])
+  @@index([amount])
+  @@map("solver_bids")
+}
+
+model Auction {
+  id            String       @id @default(uuid()) @map("id")
+  intentId      String       @unique @map("intent_id")
+  startTime     DateTime     @map("start_time")
+  endTime       DateTime     @map("end_time")
+  minBid        Float?       @map("min_bid")
+  winningBidId  String?      @map("winning_bid_id")
+  state         AuctionState @default(pending) @map("state")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  intent      Intent     @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  winningBid  SolverBid? @relation(fields: [winningBidId], references: [id])
+
+  @@index([state, endTime])
+  @@map("auctions")
+}
+
+// =============================================================================
+// SOLVER MARKETPLACE (Upgrade 8)
+// =============================================================================
+
+model SolverProfile {
+  id           String   @id @default(uuid()) @map("id")
+  userId       String?  @map("user_id")
+  name         String   @map("name")
+  endpoint     String?  @map("endpoint")
+  capabilities String[] @map("capabilities")
+  stake        Float    @default(0) @map("stake")
+  reputation   Float    @default(0) @map("reputation")
+  totalBids    Int      @default(0) @map("total_bids")
+  wonBids      Int      @default(0) @map("won_bids")
+  totalVolume  Float    @default(0) @map("total_volume")
+  status       String   @default("active") @map("status")
+  metadata     Json?    @map("metadata")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  bids          SolverBid[]
+  rewards       SolverReward[]
+  reputationHistory SolverReputationHistory[]
+
+  @@index([reputation])
+  @@index([status])
+  @@index([totalVolume])
+  @@map("solver_profiles")
+}
+
+model SolverReward {
+  id        String   @id @default(uuid()) @map("id")
+  solverId  String   @map("solver_id")
+  amount    Float    @map("amount")
+  reason    String   @map("reason")
+  txHash    String?  @map("tx_hash")
+  awardedAt DateTime @default(now()) @map("awarded_at")
+
+  solver SolverProfile @relation(fields: [solverId], references: [id], onDelete: Cascade)
+
+  @@index([solverId])
+  @@index([awardedAt])
+  @@map("solver_rewards")
+}
+
+model SolverReputationHistory {
+  id         String   @id @default(uuid()) @map("id")
+  solverId   String   @map("solver_id")
+  score      Float    @map("score")
+  change     Float    @map("change")
+  reason     String   @map("reason")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  solver SolverProfile @relation(fields: [solverId], references: [id], onDelete: Cascade)
+
+  @@index([solverId, recordedAt])
+  @@map("solver_reputation_history")
+}
+
+// =============================================================================
+// SETTLEMENT (Enhanced - Upgrade 9)
+// =============================================================================
+
 model Settlement {
-  id             String   @id @default(uuid())
-  txHash         String   @unique
-  routeId        String
-  proofHash      String
-  sourceChainId  String
-  destChainId    String
-  relayerAddress String
-  amount         Float
-  fee            Float
-  state          String   @default("pending")
-  confirmations  Int      @default(0)
+  id              String          @id @default(uuid()) @map("id")
+  txHash          String          @unique @map("tx_hash")
+  routeId         String          @map("route_id")
+  proofHash       String          @map("proof_hash")
+  sourceChainId   String          @map("source_chain_id")
+  destChainId     String          @map("dest_chain_id")
+  relayerAddress  String          @map("relayer_address")
+  amount          Float           @map("amount")
+  fee             Float           @map("fee")
+  state           SettlementState @default(pending) @map("state")
+  confirmations   Int             @default(0) @map("confirmations")
+  blockNumber     Int?            @map("block_number")
+  finalityRisk    Float?          @default(0) @map("finality_risk")
+  metadata        Json?           @map("metadata")
 
   sourceChain Chain @relation("SettlementSource", fields: [sourceChainId], references: [id])
   destChain   Chain @relation("SettlementDest", fields: [destChainId], references: [id])
+  route       Route @relation(fields: [routeId], references: [id])
+  zkProof     ZkProof?
+  relayerPerformance RelayerPerformanceHistory[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([routeId])
+  @@index([state])
+  @@index([sourceChainId, destChainId])
+  @@index([createdAt])
+  @@map("settlements")
 }
+
+model ZkProof {
+  id                String       @id @default(uuid()) @map("id")
+  settlementId      String       @unique @map("settlement_id")
+  proof             String       @map("proof")
+  publicInputs      Json         @map("public_inputs")
+  publicOutputs     Json?        @map("public_outputs")
+  verifyingKey      String       @map("verifying_key")
+  state             ZkProofState @default(generated) @map("state")
+  provingTime       Int?         @map("proving_time")
+  verificationGas   Int?         @map("verification_gas")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  settlement    Settlement             @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  attestations  VerifierAttestation[]
+  chainLinks    AttestationChain[]     @relation("ChildAttestation")
+  parentLink    AttestationChain?      @relation("ParentAttestation")
+
+  @@map("zk_proofs")
+}
+
+model VerifierAttestation {
+  id           String   @id @default(uuid()) @map("id")
+  zkProofId    String   @map("zk_proof_id")
+  verifier     String   @map("verifier")
+  attestation  String   @map("attestation")
+  signature    String?  @map("signature")
+  timestamp    DateTime @default(now()) @map("timestamp")
+  state        String   @default("pending") @map("state")
+
+  zkProof ZkProof @relation(fields: [zkProofId], references: [id], onDelete: Cascade)
+
+  @@index([zkProofId, verifier])
+  @@map("verifier_attestations")
+}
+
+model AttestationChain {
+  id                    String   @id @default(uuid()) @map("id")
+  zkProofId             String   @map("zk_proof_id")
+  previousAttestationId String?  @map("previous_attestation_id")
+  root                  String   @map("root")
+  depth                 Int      @default(0) @map("depth")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  zkProof       ZkProof           @relation("ChildAttestation", fields: [zkProofId], references: [id], onDelete: Cascade)
+  previousAttestation AttestationChain? @relation("ParentAttestation", fields: [previousAttestationId], references: [id])
+
+  @@index([zkProofId])
+  @@index([root])
+  @@map("attestation_chains")
+}
+
+// =============================================================================
+// PRIVATE MEMPOOL (Upgrade 2)
+// =============================================================================
+
+model EncryptedTx {
+  id               String   @id @default(uuid()) @map("id")
+  bundleId         String?  @map("bundle_id")
+  chainId          String   @map("chain_id")
+  encryptedPayload String   @map("encrypted_payload")
+  commitmentHash   String   @map("commitment_hash")
+  submitter        String   @map("submitter")
+  ordering         Int      @default(0) @map("ordering")
+  revealedAt       DateTime? @map("revealed_at")
+  txHash           String?  @map("tx_hash")
+  status           String   @default("sealed") @map("status")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  bundle SealedBundle? @relation(fields: [bundleId], references: [id])
+  chain  Chain         @relation(fields: [chainId], references: [id])
+
+  @@unique([commitmentHash, chainId])
+  @@index([chainId, status])
+  @@index([bundleId])
+  @@map("encrypted_txs")
+}
+
+model SealedBundle {
+  id              String    @id @default(uuid()) @map("id")
+  commitmentRoot  String    @unique @map("commitment_root")
+  sealedAt        DateTime  @default(now()) @map("sealed_at")
+  revealAt        DateTime? @map("reveal_at")
+  revealedAt      DateTime? @map("revealed_at")
+  state           String    @default("sealed") @map("state") // sealed | revealed | landed | failed
+  signature       String?   @map("signature")
+  metadata        Json?     @map("metadata")
+
+  encryptedTxs EncryptedTx[]
+
+  @@index([state])
+  @@index([sealedAt])
+  @@map("sealed_bundles")
+}
+
+// =============================================================================
+// LIQUIDITY POOL (Enhanced - Upgrade 11)
+// =============================================================================
 
 model LiquidityPool {
-  id           String @id @default(uuid())
-  chainId      Int
-  token        String
-  depth        Float
-  utilization  Float
-  apy          Float
-  volume24h    Float
-  fee          Float
+  id           String @id @default(uuid()) @map("id")
+  chainId      Int    @map("chain_id")
+  token        String @map("token")
+  tokenAddress String? @map("token_address")
+  depth        Float  @default(0) @map("depth")
+  utilization  Float  @default(0) @map("utilization")
+  apy          Float  @default(0) @map("apy")
+  volume24h    Float  @default(0) @map("volume_24h")
+  fee          Float  @default(0.003) @map("fee")
+  price        Float? @map("price")
+  liquidity    Float? @map("liquidity")
+  metadata     Json?  @map("metadata")
 
   chain Chain @relation(fields: [chainId], references: [chainId])
+
+  @@unique([chainId, token])
+  @@index([chainId, utilization])
+  @@index([depth])
+  @@map("liquidity_pools")
 }
 
-model Alert {
-  id        String   @id @default(uuid())
-  type      String
-  severity  String
-  message   String
-  chainId   String?
-  read      Boolean  @default(false)
+model LiquidityPredictionModel {
+  id            String   @id @default(uuid()) @map("id")
+  name          String   @map("name")
+  version       String   @map("version")
+  modelType     String   @map("model_type")
+  parameters    Json     @map("parameters")
+  accuracy      Float    @default(0) @map("accuracy")
+  mape          Float?   @map("mape") // Mean Absolute Percentage Error
+  lastTrainedAt DateTime @map("last_trained_at")
+  trainingData  Json?    @map("training_data")
+  status        String   @default("active") @map("status")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  createdAt DateTime @default(now())
+  forecasts       LiquidityForecast[]
+  accuracyRecords ForecastAccuracy[]
+
+  @@index([name, version])
+  @@index([status])
+  @@map("liquidity_prediction_models")
 }
 
-model WatchlistItem {
-  id      String @id @default(uuid())
-  symbol  String
-  name    String
-  price   Float
-  chainId String
+model LiquidityForecast {
+  id                 String   @id @default(uuid()) @map("id")
+  modelId            String   @map("model_id")
+  chainId            String   @map("chain_id")
+  token              String   @map("token")
+  predictedDepth     Float    @map("predicted_depth")
+  predictedUtilization Float @map("predicted_utilization")
+  predictedVolume    Float?   @map("predicted_volume")
+  predictedFee       Float?   @map("predicted_fee")
+  confidenceInterval Json?    @map("confidence_interval")
+  forecastTime       DateTime @map("forecast_time")
+  horizon            String   @default("1h") @map("horizon")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  model LiquidityPredictionModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  chain Chain                     @relation(fields: [chainId], references: [id])
+
+  @@index([modelId, forecastTime])
+  @@index([chainId, token, forecastTime])
+  @@map("liquidity_forecasts")
 }
+
+model ForecastAccuracy {
+  id                String   @id @default(uuid()) @map("id")
+  modelId           String   @map("model_id")
+  actualDepth       Float    @map("actual_depth")
+  predictedDepth    Float    @map("predicted_depth")
+  actualUtilization Float?   @map("actual_utilization")
+  predictedUtilization Float? @map("predicted_utilization")
+  error             Float    @map("error")
+  errorPct          Float?   @map("error_pct")
+  calculatedAt      DateTime @default(now()) @map("calculated_at")
+
+  model LiquidityPredictionModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([modelId, calculatedAt])
+  @@map("forecast_accuracy")
+}
+
+// =============================================================================
+// GRAPH ENGINE (Upgrade 3)
+// =============================================================================
+
+model GraphNode {
+  id        String @id @default(uuid()) @map("id")
+  chainId   String @map("chain_id")
+  token     String @map("token")
+  nodeType  String @default("pool") @map("node_type")
+  metadata  Json?  @map("metadata")
+
+  chain Chain @relation(fields: [chainId], references: [id])
+
+  sourceEdges GraphEdge[] @relation("SourceNode")
+  destEdges   GraphEdge[] @relation("DestNode")
+
+  @@unique([chainId, token, nodeType])
+  @@index([chainId])
+  @@map("graph_nodes")
+}
+
+model GraphEdge {
+  id           String   @id @default(uuid()) @map("id")
+  sourceNodeId String   @map("source_node_id")
+  destNodeId   String   @map("dest_node_id")
+  weight       Float    @default(0) @map("weight")
+  bridge       String?  @map("bridge")
+  latency      Float?   @map("latency")
+  fee          Float?   @map("fee")
+  liquidity    Float?   @map("liquidity")
+  isActive     Boolean  @default(true) @map("is_active")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sourceNode GraphNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  destNode   GraphNode @relation("DestNode", fields: [destNodeId], references: [id], onDelete: Cascade)
+
+  @@index([sourceNodeId, destNodeId])
+  @@index([isActive, weight])
+  @@map("graph_edges")
+}
+
+model PathHistory {
+  id           String   @id @default(uuid()) @map("id")
+  sourceNodeId String   @map("source_node_id")
+  destNodeId   String   @map("dest_node_id")
+  routeId      String   @map("route_id")
+  latency      Float    @map("latency")
+  gasUsed      Float?   @map("gas_used")
+  success      Boolean  @default(true) @map("success")
+  timestamp    DateTime @default(now()) @map("timestamp")
+
+  sourceNode GraphNode @relation("PathSource", fields: [sourceNodeId], references: [id])
+  destNode   GraphNode @relation("PathDest", fields: [destNodeId], references: [id])
+  route      Route     @relation(fields: [routeId], references: [id])
+
+  @@index([sourceNodeId, destNodeId, timestamp])
+  @@index([routeId, timestamp])
+  @@map("path_history")
+}
+
+// =============================================================================
+// AI COPILOT (Upgrade 4)
+// =============================================================================
+
+model AiRecommendation {
+  id          String   @id @default(uuid()) @map("id")
+  userId      String   @map("user_id")
+  type        String   @map("type") // route | gas | liquidity | risk | strategy
+  title       String   @map("title")
+  description String   @map("description")
+  data        Json     @map("data")
+  confidence  Float    @map("confidence")
+  source      String?  @default("copilot") @map("source")
+  executed    Boolean  @default(false) @map("executed")
+  executedAt  DateTime? @map("executed_at")
+  feedback    String?  @map("feedback") // helpful | not_helpful | dismissed
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([type, confidence])
+  @@map("ai_recommendations")
+}
+
+model AiExecutionReport {
+  id         String   @id @default(uuid()) @map("id")
+  intentId   String   @unique @map("intent_id")
+  summary    String   @map("summary")
+  metrics    Json     @map("metrics")
+  recommendations Json? @map("recommendations")
+  insights   Json?    @map("insights")
+  riskAssessment Json? @map("risk_assessment")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@map("ai_execution_reports")
+}
+
+model AiChat {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  sessionId String   @map("session_id")
+  role      String   @map("role") // user | assistant | system
+  content   String   @map("content")
+  metadata  Json?    @map("metadata")
+  tokens    Int?     @map("tokens")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, sessionId, createdAt])
+  @@index([sessionId])
+  @@map("ai_chats")
+}
+
+// =============================================================================
+// DYNAMIC REBALANCING (Upgrade 5)
+// =============================================================================
+
+model FragmentStateMachine {
+  id          String   @id @default(uuid()) @map("id")
+  fragmentId  String   @map("fragment_id")
+  fromState   String   @map("from_state")
+  toState     String   @map("to_state")
+  transition  String   @map("transition")
+  triggeredBy String   @map("triggered_by") // system | user | rebalancer | solver
+  reason      String?  @map("reason")
+  metadata    Json?    @map("metadata")
+  timestamp   DateTime @default(now()) @map("timestamp")
+
+  fragment IntentFragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId, timestamp])
+  @@index([toState])
+  @@map("fragment_state_machines")
+}
+
+model RerouteEvent {
+  id           String   @id @default(uuid()) @map("id")
+  intentId     String   @map("intent_id")
+  fragmentId   String?  @map("fragment_id")
+  oldRouteId   String   @map("old_route_id")
+  newRouteId   String   @map("new_route_id")
+  reason       String   @map("reason")
+  gasSaved     Float?   @map("gas_saved")
+  timeSaved    Float?   @map("time_saved")
+  triggeredBy  String   @default("system") @map("triggered_by")
+  triggeredAt  DateTime @default(now()) @map("triggered_at")
+
+  intent  Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  oldRoute Route @relation("OldRoute", fields: [oldRouteId], references: [id])
+  newRoute Route @relation("NewRoute", fields: [newRouteId], references: [id])
+
+  @@index([intentId])
+  @@index([newRouteId])
+  @@map("reroute_events")
+}
+
+// =============================================================================
+// TREASURY AUTOMATION (Upgrade 6)
+// =============================================================================
+
+model ScheduledTask {
+  id          String            @id @default(uuid()) @map("id")
+  name        String            @map("name")
+  type        String            @map("type") // rebalance | allocation | report | cleanup
+  cron        String            @map("cron")
+  params      Json              @map("params")
+  state       ScheduleTaskState @default(active) @map("state")
+  lastRunAt   DateTime?         @map("last_run_at")
+  nextRunAt   DateTime?         @map("next_run_at")
+  lastError   String?           @map("last_error")
+  retryCount  Int               @default(0) @map("retry_count")
+  maxRetries  Int               @default(3) @map("max_retries")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([type, state])
+  @@index([nextRunAt, state])
+  @@map("scheduled_tasks")
+}
+
+model RebalancePlan {
+  id               String   @id @default(uuid()) @map("id")
+  name             String   @map("name")
+  targetAllocations Json    @map("target_allocations")
+  currentAllocations Json?  @map("current_allocations")
+  totalValue       Float?   @map("total_value")
+  status           String   @default("draft") @map("status") // draft | active | executing | completed | failed
+  executedAt       DateTime? @map("executed_at")
+  completedAt      DateTime? @map("completed_at")
+  error            String?  @map("error")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("rebalance_plans")
+}
+
+model AllocationRule {
+  id            String   @id @default(uuid()) @map("id")
+  name          String   @map("name")
+  chainId       String   @map("chain_id")
+  token         String?  @map("token")
+  minAllocation Float    @default(0) @map("min_allocation")
+  maxAllocation Float    @default(1) @map("max_allocation")
+  targetAllocation Float? @map("target_allocation")
+  priority      Int      @default(0) @map("priority")
+  enabled       Boolean  @default(true) @map("enabled")
+  conditions    Json?    @map("conditions")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  chain Chain @relation(fields: [chainId], references: [id])
+
+  @@index([chainId, enabled])
+  @@map("allocation_rules")
+}
+
+// =============================================================================
+// RISK ENGINE (Upgrade 7)
+// =============================================================================
+
+model RiskScore {
+  id           String   @id @default(uuid()) @map("id")
+  entityId     String   @map("entity_id")
+  entityType   String   @map("entity_type") // chain | route | relayer | pool | solver | user
+  score        Float    @map("score")
+  factors      Json     @map("factors")
+  previousScore Float?  @map("previous_score")
+  calculatedAt DateTime @default(now()) @map("calculated_at")
+
+  @@index([entityId, entityType])
+  @@index([score])
+  @@index([entityType, score])
+  @@index([calculatedAt])
+  @@map("risk_scores")
+}
+
+model AnomalyEvent {
+  id         String   @id @default(uuid()) @map("id")
+  type       String   @map("type")
+  severity   Severity @default(warning) @map("severity")
+  entityId   String?  @map("entity_id")
+  entityType String?  @map("entity_type")
+  title      String   @map("title")
+  details    Json     @map("details")
+  metadata   Json?    @map("metadata")
+  resolved   Boolean  @default(false) @map("resolved")
+  resolvedAt DateTime? @map("resolved_at")
+  detectedAt DateTime @default(now()) @map("detected_at")
+
+  @@index([type, severity])
+  @@index([entityId, entityType])
+  @@index([detectedAt])
+  @@index([resolved])
+  @@map("anomaly_events")
+}
+
+model ThreatIntel {
+  id          String   @id @default(uuid()) @map("id")
+  source      String   @map("source")
+  indicator   String   @map("indicator")
+  type        String   @map("type") // ip | address | contract | signature
+  confidence  Float    @default(0) @map("confidence")
+  severity    Severity @default(info) @map("severity")
+  description String?  @map("description")
+  reference   String?  @map("reference")
+  firstSeen   DateTime @default(now()) @map("first_seen")
+  lastSeen    DateTime @default(now()) @map("last_seen")
+  expiresAt   DateTime? @map("expires_at")
+
+  @@unique([source, indicator, type])
+  @@index([indicator])
+  @@index([lastSeen])
+  @@map("threat_intel")
+}
+
+// =============================================================================
+// EXECUTION REPLAY (Upgrade 12)
+// =============================================================================
+
+model ExecutionSnapshot {
+  id        String   @id @default(uuid()) @map("id")
+  intentId  String   @map("intent_id")
+  state     Json     @map("state")
+  data      Json     @map("data")
+  blockNumber Int?   @map("block_number")
+  hash      String?  @map("hash")
+  capturedAt DateTime @default(now()) @map("captured_at")
+
+  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([intentId, capturedAt])
+  @@map("execution_snapshots")
+}
+
+model FragmentTrace {
+  id        String   @id @default(uuid()) @map("id")
+  fragmentId String  @map("fragment_id")
+  step      String   @map("step")
+  action    String   @map("action")
+  data      Json     @map("data")
+  gasUsed   Float?   @map("gas_used")
+  timestamp DateTime @default(now()) @map("timestamp")
+
+  fragment IntentFragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId, timestamp])
+  @@map("fragment_traces")
+}
+
+// =============================================================================
+// RELAYER (Enhanced - Upgrade 13 & 19)
+// =============================================================================
 
 model Relayer {
-  id              String   @id @default(uuid())
-  address         String   @unique
-  endpoint        String
-  stake           Float    @default(0)
-  totalRoutes     Int      @default(0)
-  successfulRoutes Int     @default(0)
-  failedRoutes    Int      @default(0)
-  status          String   @default("inactive")
-  lastHeartbeat   DateTime?
+  id               String         @id @default(uuid()) @map("id")
+  address          String         @unique @map("address")
+  endpoint         String         @map("endpoint")
+  stake            Float          @default(0) @map("stake")
+  totalRoutes      Int            @default(0) @map("total_routes")
+  successfulRoutes Int            @default(0) @map("successful_routes")
+  failedRoutes     Int            @default(0) @map("failed_routes")
+  status           RelayerStatus  @default(inactive) @map("status")
+  trustScore       Float          @default(0) @map("trust_score")
+  version          String?        @map("version")
+  os               String?        @map("os")
+  metadata         Json?          @map("metadata")
+  lastHeartbeat    DateTime?      @map("last_heartbeat")
+  jailedAt         DateTime?      @map("jailed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  performanceHistory  RelayerPerformanceHistory[]
+  trustScoreHistory   RelayerTrustScoreHistory[]
+  slashingEvents      SlashingEvent[]
+  consensusVotes      ConsensusVote[]
+  coordinationMessages CoordinationMessage[]
+
+  @@index([status])
+  @@index([trustScore])
+  @@index([stake])
+  @@map("relayers")
+}
+
+model RelayerTrustScoreHistory {
+  id         String   @id @default(uuid()) @map("id")
+  relayerId  String   @map("relayer_id")
+  score      Float    @map("score")
+  components Json     @map("components")
+  change     Float?   @map("change")
+  reason     String?  @map("reason")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  relayer Relayer @relation(fields: [relayerId], references: [id], onDelete: Cascade)
+
+  @@index([relayerId, recordedAt])
+  @@map("relayer_trust_score_history")
+}
+
+model SlashingEvent {
+  id         String   @id @default(uuid()) @map("id")
+  relayerId  String   @map("relayer_id")
+  amount     Float    @map("amount")
+  reason     String   @map("reason")
+  evidence   Json?    @map("evidence")
+  adjudicator String? @map("adjudicator")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  relayer Relayer @relation(fields: [relayerId], references: [id], onDelete: Cascade)
+
+  @@index([relayerId])
+  @@index([occurredAt])
+  @@map("slashing_events")
+}
+
+// =============================================================================
+// RELAYER COORDINATION (Upgrade 19)
+// =============================================================================
+
+model CoordinationRound {
+  id          String              @id @default(uuid()) @map("id")
+  roundNumber Int                @map("round_number")
+  startedAt   DateTime            @default(now()) @map("started_at")
+  completedAt DateTime?           @map("completed_at")
+  state       ConsensusRoundState @default(started) @map("state")
+  threshold   Int                 @default(2) @map("threshold")
+  totalRelayers Int               @default(0) @map("total_relayers")
+  metadata    Json?               @map("metadata")
+
+  votes       ConsensusVote[]
+  messages    CoordinationMessage[]
+
+  @@unique([roundNumber])
+  @@index([state, startedAt])
+  @@map("coordination_rounds")
+}
+
+model ConsensusVote {
+  id         String   @id @default(uuid()) @map("id")
+  roundId    String   @map("round_id")
+  relayerId  String   @map("relayer_id")
+  vote       String   @map("vote")
+  signature  String?  @map("signature")
+  weight     Float    @default(1) @map("weight")
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  round   CoordinationRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  relayer Relayer           @relation(fields: [relayerId], references: [id])
+
+  @@unique([roundId, relayerId])
+  @@map("consensus_votes")
+}
+
+model CoordinationMessage {
+  id          String   @id @default(uuid()) @map("id")
+  roundId     String   @map("round_id")
+  relayerId   String   @map("relayer_id")
+  messageType String   @map("message_type") // propose | acknowledge | dispute | sync
+  payload     Json     @map("payload")
+  signature   String?  @map("signature")
+  timestamp   DateTime @default(now()) @map("timestamp")
+
+  round   CoordinationRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  relayer Relayer           @relation(fields: [relayerId], references: [id])
+
+  @@index([roundId, timestamp])
+  @@map("coordination_messages")
+}
+
+// =============================================================================
+// INSTITUTIONAL UI (Upgrade 14)
+// =============================================================================
+
+model WorkspaceConfig {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  name      String   @map("name")
+  layout    Json     @map("layout")
+  widgets   Json     @map("widgets")
+  preferences Json? @map("preferences")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("workspace_configs")
+}
+
+model SavedLayout {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  name      String   @map("name")
+  config    Json     @map("config")
+  isDefault Boolean  @default(false) @map("is_default")
+  sharing   String   @default("private") @map("sharing") // private | team | public
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("saved_layouts")
+}
+
+// =============================================================================
+// ROUTE STRATEGY BUILDER (Upgrade 15)
+// =============================================================================
+
+model RouteStrategy {
+  id          String   @id @default(uuid()) @map("id")
+  name        String   @map("name")
+  userId      String   @map("user_id")
+  description String?  @map("description")
+  conditions  Json?    @map("conditions")
+  actions     Json     @map("actions")
+  status      String   @default("draft") @map("status") // draft | active | paused | archived
+  version     Int      @default(1) @map("version")
+  executionCount Int   @default(0) @map("execution_count")
+  lastExecutedAt DateTime? @map("last_executed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User                   @relation(fields: [userId], references: [id])
+  conditionNodes ConditionTreeNode[]
+  executionLogs  StrategyExecutionLog[]
+
+  @@index([userId, status])
+  @@index([status])
+  @@map("route_strategies")
+}
+
+model ConditionTreeNode {
+  id         String                    @id @default(uuid()) @map("id")
+  strategyId String                    @map("strategy_id")
+  parentId   String?                   @map("parent_id")
+  nodeType   String                    @map("node_type") // condition | group | action
+  field      String?                   @map("field")
+  operator   StrategyConditionOperator? @map("operator")
+  value      Json?                     @map("value")
+  logicOperator String?                @map("logic_operator") // AND | OR | NOT
+  orderIndex Int                       @default(0) @map("order_index")
+
+  strategy RouteStrategy      @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  children ConditionTreeNode[] @relation("ConditionParent")
+  parent   ConditionTreeNode?  @relation("ConditionParent", fields: [parentId], references: [id])
+
+  @@index([strategyId])
+  @@index([parentId])
+  @@map("condition_tree_nodes")
+}
+
+model StrategyExecutionLog {
+  id          String   @id @default(uuid()) @map("id")
+  strategyId  String   @map("strategy_id")
+  intentId    String?  @map("intent_id")
+  routeId     String   @map("route_id")
+  trigger     String   @map("trigger") // manual | auto | schedule
+  conditionsMet Boolean @map("conditions_met")
+  result      String   @map("result") // success | failure | skipped | error
+  output      Json?    @map("output")
+  error       String?  @map("error")
+  executedAt  DateTime @default(now()) @map("executed_at")
+
+  strategy RouteStrategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  intent   Intent?       @relation(fields: [intentId], references: [id])
+  route    Route         @relation(fields: [routeId], references: [id])
+
+  @@index([strategyId, executedAt])
+  @@index([routeId, executedAt])
+  @@map("strategy_execution_logs")
+}
+
+// =============================================================================
+// POSITION ENGINE (Upgrade 16)
+// =============================================================================
+
+model Position {
+  id          String   @id @default(uuid()) @map("id")
+  userId      String   @map("user_id")
+  chainId     String   @map("chain_id")
+  token       String   @map("token")
+  amount      Float    @map("amount")
+  entryPrice  Float    @map("entry_price")
+  currentPrice Float?  @map("current_price")
+  pnl         Float?   @map("pnl")
+  pnlPct      Float?   @map("pnl_pct")
+  status      String   @default("open") @map("status") // open | closed | migrated | liquidated
+  strategyId  String?  @map("strategy_id")
+  metadata    Json?    @map("metadata")
+  openedAt    DateTime @default(now()) @map("opened_at")
+  closedAt    DateTime? @map("closed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User             @relation(fields: [userId], references: [id])
+  migrations PositionMigration[]
+  yieldSnapshots YieldSnapshot[]
+
+  @@index([userId, status])
+  @@index([chainId, token])
+  @@index([status])
+  @@map("positions")
+}
+
+model PositionMigration {
+  id             String   @id @default(uuid()) @map("id")
+  positionId     String   @map("position_id")
+  sourceChainId  String   @map("source_chain_id")
+  destChainId    String   @map("dest_chain_id")
+  amount         Float    @map("amount")
+  fee            Float    @default(0) @map("fee")
+  txHash         String?  @map("tx_hash")
+  status         String   @default("pending") @map("status")
+  executedAt     DateTime @default(now()) @map("executed_at")
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@index([positionId])
+  @@index([executedAt])
+  @@map("position_migrations")
+}
+
+model YieldSnapshot {
+  id         String   @id @default(uuid()) @map("id")
+  positionId String   @map("position_id")
+  apr        Float    @map("apr")
+  rewards    Float?   @map("rewards")
+  totalYield Float?   @map("total_yield")
+  snapshotAt DateTime @default(now()) @map("snapshot_at")
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@index([positionId, snapshotAt])
+  @@map("yield_snapshots")
+}
+
+// =============================================================================
+// COMPLIANCE LAYER (Upgrade 17)
+// =============================================================================
+
+model AuditLog {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  action    String   @map("action")
+  resource  String   @map("resource")
+  resourceId String? @map("resource_id")
+  details   Json?    @map("details")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  severity  Severity @default(info) @map("severity")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model ReportTemplate {
+  id        String   @id @default(uuid()) @map("id")
+  name      String   @unique @map("name")
+  type      String   @map("type") // compliance | performance | risk | audit
+  config    Json     @map("config")
+  schedule  String?  @map("schedule") // cron expression
+  recipients String[] @map("recipients")
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type])
+  @@map("report_templates")
+}
+
+model PermissionAudit {
+  id           String   @id @default(uuid()) @map("id")
+  userId       String   @map("user_id")
+  permissions  Json     @map("permissions")
+  changes      Json?    @map("changes")
+  reviewedBy   String   @map("reviewed_by")
+  state        String   @default("pending") @map("state") // pending | approved | rejected
+  note         String?  @map("note")
+  reviewedAt   DateTime? @map("reviewed_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user     User @relation(fields: [userId], references: [id])
+  reviewer User @relation("PermissionReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([userId, state])
+  @@index([state])
+  @@map("permission_audits")
+}
+
+// =============================================================================
+// SDK & API MANAGEMENT (Upgrade 18)
+// =============================================================================
+
+model ApiKey {
+  id             String           @id @default(uuid()) @map("id")
+  userId         String           @map("user_id")
+  name           String           @map("name")
+  key            String           @unique @map("key")
+  keyPrefix      String           @map("key_prefix")
+  permissions    ApiKeyPermission @default(read) @map("permissions")
+  allowedOrigins String[]         @map("allowed_origins")
+  rateLimitTier  String           @default("default") @map("rate_limit_tier")
+  expiresAt      DateTime?        @map("expires_at")
+  lastUsedAt     DateTime?        @map("last_used_at")
+  enabled        Boolean          @default(true) @map("enabled")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyPrefix])
+  @@index([userId, enabled])
+  @@map("api_keys")
+}
+
+model RateLimitRule {
+  id            String @id @default(uuid()) @map("id")
+  tier          String @unique @map("tier")
+  maxRequests   Int    @default(100) @map("max_requests")
+  windowSeconds Int    @default(60) @map("window_seconds")
+  burstAllowed  Int    @default(10) @map("burst_allowed")
+
+  @@map("rate_limit_rules")
+}
+
+model IntegrationWebhook {
+  id             String   @id @default(uuid()) @map("id")
+  userId         String   @map("user_id")
+  url            String   @map("url")
+  events         WebhookEventType[] @map("events")
+  secret         String   @map("secret")
+  state          String   @default("active") @map("state") // active | paused | disabled
+  retryCount     Int      @default(0) @map("retry_count")
+  lastStatus     String?  @map("last_status")
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([state])
+  @@map("integration_webhooks")
+}
+
+// =============================================================================
+// ALERT (Enhanced)
+// =============================================================================
+
+model Alert {
+  id        String   @id @default(uuid()) @map("id")
+  type      String   @map("type")
+  severity  Severity @default(info) @map("severity")
+  message   String   @map("message")
+  chainId   String?  @map("chain_id")
+  entityId  String?  @map("entity_id")
+  entityType String? @map("entity_type")
+  read      Boolean  @default(false) @map("read")
+  acknowledgedBy String? @map("acknowledged_by")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([type, severity])
+  @@index([chainId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+// =============================================================================
+// WATCHLIST ITEM (Enhanced)
+// =============================================================================
+
+model WatchlistItem {
+  id      String @id @default(uuid()) @map("id")
+  symbol  String @map("symbol")
+  name    String @map("name")
+  price   Float  @default(0) @map("price")
+  change24h Float? @map("change_24h")
+  chainId String @map("chain_id")
+  userId  String? @map("user_id")
+  alertThreshold Float? @map("alert_threshold")
+  enabled Boolean @default(true) @map("enabled")
+
+  @@index([userId])
+  @@index([symbol, chainId])
+  @@map("watchlist_items")
+}
+
+// =============================================================================
+// FUTURE-PROOFING / EXTENSIONS (Upgrade 20)
+// =============================================================================
+
+model FeatureFlag {
+  id        String    @id @default(uuid()) @map("id")
+  name      String    @unique @map("name")
+  enabled   Boolean   @default(false) @map("enabled")
+  config    Json?     @map("config")
+  description String? @map("description")
+  owner     String?   @map("owner")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+}
+
+model SchemaVersion {
+  id          String   @id @default(uuid()) @map("id")
+  version     String   @unique @map("version")
+  description String?  @map("description")
+  appliedBy   String?  @map("applied_by")
+  checksum    String?  @map("checksum")
+  appliedAt   DateTime @default(now()) @map("applied_at")
+  duration    Int?     @map("duration") // milliseconds
+
+  @@map("schema_versions")
+}
+
+model ExtensionPoint {
+  id        String  @id @default(uuid()) @map("id")
+  name      String  @unique @map("name")
+  schema    Json    @map("schema")
+  handler   String  @map("handler")
+  enabled   Boolean @default(true) @map("enabled")
+  metadata  Json?   @map("metadata")
+
+  @@map("extension_points")
+}
+
+// =============================================================================
+// TIME-SERIES TABLES (Hypertable-ready)
+// These models map to TimescaleDB hypertables. The @map annotation indicates
+// the table name. Hypertable creation is done via raw SQL migrations.
+// =============================================================================
+
+model PriceHistory {
+  id        String   @id @default(uuid()) @map("id")
+  token     String   @map("token")
+  price     Float    @map("price")
+  source    String   @default("defillama") @map("source")
+  volume    Float?   @map("volume")
+  marketCap Float?   @map("market_cap")
+  timestamp DateTime @default(now()) @map("timestamp")
+
+  @@index([token, timestamp])
+  @@index([timestamp])
+  @@map("price_history")
+}
+
+model GasPriceHistory {
+  id          String   @id @default(uuid()) @map("id")
+  chainId     String   @map("chain_id")
+  gasPrice    Float    @map("gas_price")
+  baseFee     Float?   @map("base_fee")
+  priorityFee Float?   @map("priority_fee")
+  maxFeePerGas Float?  @map("max_fee_per_gas")
+  gasUsed     Float?   @map("gas_used")
+  blockNumber Int?     @map("block_number")
+  timestamp   DateTime @default(now()) @map("timestamp")
+
+  chain Chain @relation(fields: [chainId], references: [id])
+
+  @@index([chainId, timestamp])
+  @@index([timestamp])
+  @@map("gas_price_history")
+}
+
+model RoutePerformanceHistory {
+  id           String   @id @default(uuid()) @map("id")
+  routeId      String   @map("route_id")
+  latency      Float    @map("latency")
+  successRate  Float    @map("success_rate")
+  volume       Float    @map("volume")
+  executionCount Int    @default(1) @map("execution_count")
+  avgGasUsed   Float?   @map("avg_gas_used")
+  timestamp    DateTime @default(now()) @map("timestamp")
+
+  route Route @relation(fields: [routeId], references: [id])
+
+  @@index([routeId, timestamp])
+  @@index([timestamp])
+  @@map("route_performance_history")
+}
+
+model RiskScoreHistory {
+  id           String   @id @default(uuid()) @map("id")
+  entityId     String   @map("entity_id")
+  entityType   String   @map("entity_type")
+  score        Float    @map("score")
+  factors      Json?    @map("factors")
+  timestamp    DateTime @default(now()) @map("timestamp")
+
+  @@index([entityId, entityType, timestamp])
+  @@index([timestamp])
+  @@map("risk_score_history")
+}
+
+model RelayerPerformanceHistory {
+  id          String   @id @default(uuid()) @map("id")
+  relayerId   String   @map("relayer_id")
+  settlementId String? @map("settlement_id")
+  latency     Float    @map("latency")
+  success     Boolean  @default(true) @map("success")
+  gasUsed     Float?   @map("gas_used")
+  fee         Float?   @map("fee")
+  timestamp   DateTime @default(now()) @map("timestamp")
+
+  relayer   Relayer    @relation(fields: [relayerId], references: [id])
+  settlement Settlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([relayerId, timestamp])
+  @@index([timestamp])
+  @@map("relayer_performance_history")
 }
