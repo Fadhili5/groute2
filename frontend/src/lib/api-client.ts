@@ -130,6 +130,44 @@ class ApiClient {
   async getSystemHealth(): Promise<SystemHealth> {
     return this.fetch("/system/health");
   }
+
+  // Solver
+  async getSolvers(): Promise<{ solvers: any[]; total: number; totalVolume: number }> {
+    return this.fetch("/solver/solvers");
+  }
+
+  async getSolver(id: string): Promise<any> {
+    return this.fetch(`/solver/solvers/${id}`);
+  }
+
+  async getAuctions(params?: { state?: string; limit?: string }): Promise<{ auctions: any[]; total: number; active: number }> {
+    const query = new URLSearchParams(params as Record<string, string>).toString();
+    return this.fetch(`/solver/auctions${query ? `?${query}` : ""}`);
+  }
+
+  async getAuction(id: string): Promise<any> {
+    return this.fetch(`/solver/auctions/${id}`);
+  }
+
+  async createAuction(data: { intentId: string; tokenIn: string; tokenOut: string; amountIn: number; startPrice: number }): Promise<any> {
+    return this.fetch("/solver/auctions", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async submitBid(data: { auctionId: string; price: number; estimatedGas: number; executionTime: number; routeId: string }): Promise<any> {
+    return this.fetch(`/solver/auctions/${data.auctionId}/bids`, { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async settleAuction(auctionId: string): Promise<any> {
+    return this.fetch(`/solver/auctions/${auctionId}/settle`, { method: "POST" });
+  }
+
+  async getLeaderboard(): Promise<{ leaderboard: any[]; updatedAt: number }> {
+    return this.fetch("/solver/leaderboard");
+  }
+
+  async getSolverStats(): Promise<any> {
+    return this.fetch("/solver/stats");
+  }
 }
 
 export const api = new ApiClient(API_BASE);

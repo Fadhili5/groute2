@@ -9,6 +9,7 @@ import { executionRoutes } from "./routes/execution.js";
 import { settlementRoutes } from "./routes/settlement.js";
 import { routeRoutes } from "./routes/routes.js";
 import { alertRoutes } from "./routes/alerts.js";
+import { solverRoutes } from "./routes/solver.js";
 import { websocketHandler, setRedisClient } from "./websocket/handler.js";
 import { errorHandler } from "./middleware/error.js";
 
@@ -63,6 +64,7 @@ app.register(executionRoutes, { prefix: "/api/execution", prisma, redis });
 app.register(settlementRoutes, { prefix: "/api/settlement", prisma, redis });
 app.register(routeRoutes, { prefix: "/api/routes", prisma, redis });
 app.register(alertRoutes, { prefix: "/api/alerts", prisma, redis });
+app.register(solverRoutes, { prefix: "/api/solver", prisma, redis });
 
 setRedisClient(redisSub);
 
