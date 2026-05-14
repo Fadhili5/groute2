@@ -10,19 +10,25 @@ import type { RouteFragment } from "@/types";
 const FRAGMENT_ICONS: Record<string, any> = {
   wallet: Wallet,
   fragment: Shuffle,
+  split: Shuffle,
   bridge: GitBranch,
   dex: ArrowRight,
+  swap: ArrowRight,
   liquidity: Database,
   settlement: CheckCircle2,
+  settle: CheckCircle2,
 };
 
 const FRAGMENT_COLORS: Record<string, string> = {
   wallet: "text-ghost-400 border-ghost-700/50",
   fragment: "text-matrix-yellow border-matrix-yellow/30",
+  split: "text-matrix-yellow border-matrix-yellow/30",
   bridge: "text-matrix-accent border-matrix-accent/30",
   dex: "text-matrix-green border-matrix-green/30",
+  swap: "text-matrix-green border-matrix-green/30",
   liquidity: "text-matrix-purple border-matrix-purple/30",
   settlement: "text-surface-400 border-surface-700",
+  settle: "text-surface-400 border-surface-700",
 };
 
 export function RouteVisualizer() {
@@ -95,7 +101,7 @@ export function RouteVisualizer() {
           <>
             <div className="relative flex flex-col items-center py-4">
               {fragments.map((f, i) => {
-                const Icon = FRAGMENT_ICONS[f.type];
+                const Icon = FRAGMENT_ICONS[f.type] || ArrowRight;
                 return (
                   <div key={f.id} className="flex items-center w-full gap-3">
                     <div className="flex flex-col items-center">

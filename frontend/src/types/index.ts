@@ -16,7 +16,7 @@ export interface Chain {
 
 export interface RouteFragment {
   id: string;
-  type: "wallet" | "fragment" | "bridge" | "dex" | "liquidity" | "settlement";
+  type: "wallet" | "fragment" | "split" | "bridge" | "dex" | "swap" | "liquidity" | "settlement" | "settle";
   label: string;
   cost: number;
   latency: number;

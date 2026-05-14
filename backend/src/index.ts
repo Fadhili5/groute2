@@ -13,19 +13,34 @@ import { websocketHandler, setRedisClient } from "./websocket/handler.js";
 import { errorHandler } from "./middleware/error.js";
 
 let prisma: any = null;
-try {
-  const { PrismaClient } = await import("@prisma/client");
-  prisma = new PrismaClient();
-} catch {
-  console.warn("Prisma unavailable — running without database. /api/chains will return mock data.");
+if (process.env.DATABASE_URL) {
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    prisma = new PrismaClient();
+    await prisma.$connect();
+  } catch {
+    console.warn("Prisma unavailable — running without database. All routes will return fallback data.");
+    prisma = null;
+  }
+} else {
+  console.warn("DATABASE_URL not set — running without database. All routes will return fallback data.");
 }
 
 let redis: any = null;
+let redisSub: any = null;
 try {
   redis = new Redis(config.redis.url);
   redis.on("error", (err: Error) => console.error("[Redis]", err.message));
 } catch {
   console.warn("Redis unavailable — running without cache.");
+}
+
+// Separate connection for Redis Pub/Sub (can't share with commands)
+if (config.redis.url) {
+  try {
+    redisSub = new Redis(config.redis.url);
+    redisSub.on("error", (err: Error) => console.error("[Redis Sub]", err.message));
+  } catch { /* sub client optional */ }
 }
 
 const app = Fastify({
@@ -49,7 +64,7 @@ app.register(settlementRoutes, { prefix: "/api/settlement", prisma, redis });
 app.register(routeRoutes, { prefix: "/api/routes", prisma, redis });
 app.register(alertRoutes, { prefix: "/api/alerts", prisma, redis });
 
-setRedisClient(redis);
+setRedisClient(redisSub);
 
 app.register(async function (fastify) {
   fastify.get("/ws", { websocket: true }, websocketHandler);
