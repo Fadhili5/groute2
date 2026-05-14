@@ -6,13 +6,14 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid, ArrowRightLeft, Route, Waves, FileCheck,
-  Terminal, Bell, Eye, ChevronLeft, ChevronRight,
+  Terminal, Bell, Eye, ChevronLeft, ChevronRight, Gavel,
 } from "lucide-react";
 import { useWalletStore, useUIStore } from "@/stores";
 
 const NAV_ITEMS = [
   { icon: LayoutGrid, label: "Market Matrix", href: "/market-matrix" },
   { icon: ArrowRightLeft, label: "Execution Desk", href: "/execution-desk" },
+  { icon: Gavel, label: "Solver Marketplace", href: "/solver-marketplace" },
   { icon: Route, label: "Route Analysis", href: "/route-analysis" },
   { icon: Waves, label: "Liquidity Intelligence", href: "/liquidity-intelligence" },
   { icon: FileCheck, label: "Settlement", href: "/settlement" },

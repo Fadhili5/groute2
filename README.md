@@ -86,7 +86,7 @@ GhostRoute Terminal is a unified institutional execution console for cross-chain
 │                                                              │
 │  IntentRouter · FragmentVault · RouteRegistry                │
 │  SettlementVerifier · PrivacyScoreOracle                     │
-│  TreasuryFeeCollector · Governance · RelayerRegistry         │
+│  TreasuryFeeCollector · Governance · RelayerRegistry · SolverAuction │
 │                                                              │
 │  All: AccessControl · Pausable · ReentrancyGuard · NatSpec  │
 └─────────────────────────────────────────────────────────────┘
@@ -271,7 +271,8 @@ groute/
 │   │   │   ├── globals.css          # Tailwind + AG Grid + Recharts themes
 │   │   │   ├── market-matrix/       # Market Matrix page
 │   │   │   ├── execution-desk/      # Execution Desk page
-│   │   │   ├── route-analysis/      # Route Analysis page
+      │   │   │   ├── solver-marketplace/ # Solver Marketplace page
+      │   │   │   ├── route-analysis/      # Route Analysis page
 │   │   │   ├── liquidity-intelligence/ # Liquidity Intelligence page
 │   │   │   ├── settlement/          # Settlement page
 │   │   │   ├── command-terminal/    # Command Terminal page
@@ -307,6 +308,7 @@ groute/
 │   │   │   ├── settlement.ts        # /api/settlement/* (proofs, verify, inspect)
 │   │   │   ├── routes.ts            # /api/routes/* (list, recommend, simulate)
 │   │   │   └── alerts.ts            # /api/alerts/* (list, unread, read)
+│   │   │   │   └── solver.ts            # /api/solver/* (auctions, bids, leaderboard)
 │   │   ├── services/                # Service layer
 │   │   │   ├── rpc-provider.ts      # ethers.js RPC provider management
 │   │   │   ├── price-feed.ts        # CoinGecko price integration
