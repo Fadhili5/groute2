@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useMarketStore, useAlertStore, useWalletStore } from "@/stores";
+import { api } from "@/lib/api-client";
 
 interface WSMessage {
   type: "chain_update" | "market_update" | "alert" | "price_update" | "kpi_update" | "block_update" | "execution_update" | "settlement_update";
@@ -12,13 +13,28 @@ export function useWebSocket(url?: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const retryCountRef = useRef(0);
 
   const { setChains } = useMarketStore();
   const { addAlert } = useAlertStore();
   const { setKpis, setSystemHealth } = useWalletStore();
 
+  const loadInitialData = async () => {
+    try {
+      const [chainsRes, kpiRes, healthRes] = await Promise.all([
+        api.getChains().catch(() => null),
+        api.getKpi().catch(() => null),
+        api.getSystemHealth().catch(() => null),
+      ]);
+      if (chainsRes?.chains) setChains(chainsRes.chains);
+      if (kpiRes) setKpis(kpiRes);
+      if (healthRes) setSystemHealth(healthRes);
+    } catch { /* initial load failed, will retry via reconnection */ }
+  };
+
   useEffect(() => {
     mountedRef.current = true;
+    loadInitialData();
     return () => {
       mountedRef.current = false;
       clearTimeout(reconnectRef.current);
@@ -27,32 +43,17 @@ export function useWebSocket(url?: string) {
   }, []);
 
   useEffect(() => {
-    if (!url) {
-      const simulationInterval = setInterval(() => {
-        if (!mountedRef.current) return;
-        useMarketStore.getState().chains.length > 0 && useMarketStore.setState((s) => ({
-          chains: s.chains.map((c) => ({ ...c, gas: +(c.gas * (0.98 + Math.random() * 0.04)).toFixed(4) }))
-        }));
-        const alertTypes = ["route_success", "mev_event", "gas_spike"] as const;
-        if (Math.random() > 0.7) {
-          const type = alertTypes[Math.floor(Math.random() * alertTypes.length)];
-          useAlertStore.getState().addAlert({
-            id: `ws-${Date.now()}`,
-            type,
-            severity: type === "route_success" ? "info" : "warning",
-            message: type === "route_success" ? `Route 0x${Math.random().toString(16).slice(2, 6)} completed` : type === "mev_event" ? "MEV activity detected" : "Gas price fluctuation",
-            timestamp: Date.now(),
-            read: false,
-          });
-        }
-      }, 8000);
-      return () => clearInterval(simulationInterval);
-    }
+    if (!url) return;
 
     const connect = () => {
       try {
         const ws = new WebSocket(url);
         wsRef.current = ws;
+
+        ws.onopen = () => {
+          retryCountRef.current = 0;
+          loadInitialData();
+        };
 
         ws.onmessage = (event) => {
           if (!mountedRef.current) return;
@@ -63,7 +64,6 @@ export function useWebSocket(url?: string) {
                 setChains(msg.data);
                 break;
               case "market_update": {
-                // backend sends single chain delta: { chain, gas, liquidity, spread }
                 const current = useMarketStore.getState().chains;
                 const updated = current.map((c) =>
                   c.name === msg.data.chain
@@ -87,7 +87,11 @@ export function useWebSocket(url?: string) {
         };
 
         ws.onclose = () => {
-          if (mountedRef.current) reconnectRef.current = setTimeout(connect, 5000);
+          if (mountedRef.current) {
+            retryCountRef.current++;
+            const delay = Math.min(5000 * Math.pow(2, retryCountRef.current), 30000);
+            reconnectRef.current = setTimeout(connect, delay);
+          }
         };
 
         ws.onerror = () => ws.close();

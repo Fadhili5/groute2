@@ -41,6 +41,7 @@ contract Governance is AccessControl, Pausable, EIP712 {
     uint256 public votingPeriod = 50400;
     uint256 public quorum = 4;
     uint256 public proposalCount;
+    uint256 public approvalDelay = 100;
 
     mapping(bytes32 => Proposal) public proposals;
     mapping(bytes32 => mapping(address => Vote)) public votes;
@@ -48,12 +49,14 @@ contract Governance is AccessControl, Pausable, EIP712 {
     mapping(address => uint256) public votingPower;
 
     event ProposalCreated(bytes32 indexed id, address indexed proposer, string description, uint256 startBlock, uint256 endBlock);
+    event ProposalActivated(bytes32 indexed id);
     event VoteCast(bytes32 indexed proposalId, address indexed voter, bool support, uint256 weight);
     event ProposalExecuted(bytes32 indexed id);
     event ProposalCancelled(bytes32 indexed id);
     event VotingPowerUpdated(address indexed voter, uint256 newPower);
     event QuorumUpdated(uint256 newQuorum);
     event VotingPeriodUpdated(uint256 newPeriod);
+    event ApprovalDelayUpdated(uint256 newDelay);
 
     error ProposalNotFound(bytes32 id);
     error ProposalNotActive(bytes32 id);
@@ -63,6 +66,9 @@ contract Governance is AccessControl, Pausable, EIP712 {
     error QuorumNotMet();
     error InvalidProposal();
     error NotProposer();
+    error NoVotingPower();
+    error ProposalNotSucceeded(bytes32 id);
+    error ProposalNotPending(bytes32 id);
 
     constructor() EIP712("GhostRoute Governance", "1") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -90,15 +96,25 @@ contract Governance is AccessControl, Pausable, EIP712 {
             forVotes: 0,
             againstVotes: 0,
             startBlock: block.number,
-            endBlock: block.number + votingPeriod,
-            state: ProposalState.Active,
+            endBlock: block.number + votingPeriod + approvalDelay,
+            state: ProposalState.Pending,
             executed: false,
             description: description,
             createdAt: block.timestamp
         });
 
-        emit ProposalCreated(id, msg.sender, description, block.number, block.number + votingPeriod);
+        emit ProposalCreated(id, msg.sender, description, block.number, block.number + votingPeriod + approvalDelay);
         return id;
+    }
+
+    function activateProposal(bytes32 proposalId) external {
+        Proposal storage proposal = proposals[proposalId];
+        if (proposal.id == bytes32(0)) revert ProposalNotFound(proposalId);
+        if (proposal.state != ProposalState.Pending) revert ProposalNotPending(proposalId);
+        if (block.number < proposal.startBlock + approvalDelay) revert VotingPeriodEnded();
+
+        proposal.state = ProposalState.Active;
+        emit ProposalActivated(proposalId);
     }
 
     function castVote(bytes32 proposalId, bool support, string calldata reason) external {
@@ -109,7 +125,7 @@ contract Governance is AccessControl, Pausable, EIP712 {
         if (votes[proposalId][msg.sender].voter != address(0)) revert AlreadyVoted(proposalId, msg.sender);
 
         uint256 weight = votingPower[msg.sender];
-        if (weight == 0) weight = 1;
+        if (weight == 0) revert NoVotingPower();
 
         votes[proposalId][msg.sender] = Vote({
             voter: msg.sender,
@@ -143,6 +159,14 @@ contract Governance is AccessControl, Pausable, EIP712 {
 
         if (proposalVoters[proposalId].length < quorum) revert QuorumNotMet();
 
+        proposal.state = ProposalState.Succeeded;
+    }
+
+    function finalizeProposal(bytes32 proposalId) external onlyRole(EXECUTOR_ROLE) {
+        Proposal storage proposal = proposals[proposalId];
+        if (proposal.id == bytes32(0)) revert ProposalNotFound(proposalId);
+        if (proposal.state != ProposalState.Succeeded) revert ProposalNotSucceeded(proposalId);
+
         proposal.state = ProposalState.Executed;
         proposal.executed = true;
 
@@ -171,6 +195,11 @@ contract Governance is AccessControl, Pausable, EIP712 {
     function setVotingPeriod(uint256 newPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
         votingPeriod = newPeriod;
         emit VotingPeriodUpdated(newPeriod);
+    }
+
+    function setApprovalDelay(uint256 newDelay) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        approvalDelay = newDelay;
+        emit ApprovalDelayUpdated(newDelay);
     }
 
     function getProposal(bytes32 id) external view returns (Proposal memory) {

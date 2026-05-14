@@ -1,5 +1,6 @@
 import { FastifyRequest } from "fastify";
 import { WebSocket } from "ws";
+import { Redis } from "ioredis";
 
 interface Client {
   ws: WebSocket;
@@ -7,6 +8,33 @@ interface Client {
 }
 
 const clients = new Map<string, Client>();
+let redisSub: Redis | null = null;
+
+export function setRedisClient(redis: Redis | null) {
+  redisSub = redis;
+  if (redisSub) {
+    redisSub.subscribe("ws:events", (err) => {
+      if (err) console.error("[WS] Redis subscribe failed:", err.message);
+    });
+    redisSub.on("message", (_channel, message) => {
+      try {
+        const event = JSON.parse(message);
+        broadcast(event.channel || "all", event);
+      } catch { /* ignore bad messages */ }
+    });
+  }
+}
+
+function broadcast(channel: string, event: any) {
+  const payload = JSON.stringify(event);
+  clients.forEach((client) => {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      if (client.subscriptions.has(channel) || client.subscriptions.size === 0) {
+        client.ws.send(payload);
+      }
+    }
+  });
+}
 
 export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
   const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -50,6 +78,12 @@ export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
 
   socket.on("close", () => {
     clients.delete(clientId);
+    clearInterval(interval);
+  });
+
+  socket.on("error", () => {
+    clients.delete(clientId);
+    clearInterval(interval);
   });
 
   socket.send(JSON.stringify({
@@ -67,8 +101,6 @@ export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
       }
     }
   }, 3000);
-
-  socket.on("close", () => clearInterval(interval));
 }
 
 function generateEvent() {
@@ -108,6 +140,7 @@ function generateEvent() {
       type: "alert",
       channel: "alerts",
       data: {
+        id: `ws-${Date.now()}`,
         severity: ["info", "warning", "critical"][Math.floor(Math.random() * 3)],
         message: [
           "Route completed successfully",

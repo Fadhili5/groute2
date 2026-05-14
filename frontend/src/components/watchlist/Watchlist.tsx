@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useWalletStore } from "@/stores";
-import { TrendingUp, TrendingDown, Eye, EyeOff } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { TrendingUp, TrendingDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { WatchlistItem } from "@/types";
 
 const DEFAULT_WATCHLIST: WatchlistItem[] = [

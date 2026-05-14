@@ -2,22 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { cn, shortenAddress, shortenTxHash, formatTimestamp } from "@/lib/utils";
-import { FileCheck, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { FileCheck, Loader2, CheckCircle2, XCircle, Clock, Search } from "lucide-react";
 import type { SettlementData } from "@/types";
-
-function createSample(): SettlementData {
-  const now = Date.now();
-  return {
-    txHash: "0x7f3c8a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
-    routeId: "0x9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
-    proofHash: "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
-    state: "confirmed",
-    fees: 12.45,
-    relayer: "0x8f3c7a2b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
-    confirmations: 32,
-    timestamp: now - 30000,
-  };
-}
 
 const STATE_ICONS: Record<string, any> = {
   pending: Clock,
@@ -36,16 +23,59 @@ const STATE_COLORS: Record<string, string> = {
 export function SettlementInspector() {
   const [mounted, setMounted] = useState(false);
   const [txInput, setTxInput] = useState("");
-  const [settlement] = useState<SettlementData>(() => createSample());
+  const [settlement, setSettlement] = useState<SettlementData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
-  const handleInspect = () => {
+  useEffect(() => {
+    api.getProofs()
+      .then((res) => {
+        if (res.proofs?.length) setSettlement(res.proofs[0]);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleInspect = async () => {
     if (!txInput.trim()) return;
     setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    setError(null);
+    try {
+      const res = await api.verifyTx(txInput.trim());
+      setSettlement({
+        txHash: res.txHash,
+        routeId: settlement?.routeId || "",
+        proofHash: settlement?.proofHash || "",
+        state: res.state,
+        fees: settlement?.fees || 0,
+        relayer: settlement?.relayer || "",
+        confirmations: res.confirmations,
+        timestamp: res.timestamp,
+      });
+    } catch {
+      try {
+        const res = await api.inspect({ txHash: txInput.trim() });
+        setSettlement(res);
+      } catch {
+        setError("Transaction not found");
+      }
+    }
+    setLoading(false);
   };
+
+  if (!settlement) {
+    return (
+      <div className="panel h-full flex flex-col">
+        <div className="panel-header flex-shrink-0">
+          <span className="panel-title">Settlement Inspector</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-4 h-4 animate-spin text-surface-500" />
+        </div>
+      </div>
+    );
+  }
 
   const StateIcon = STATE_ICONS[settlement.state] || Clock;
   const ts = mounted ? formatTimestamp(settlement.timestamp) : "00:00:00";
@@ -59,7 +89,7 @@ export function SettlementInspector() {
           disabled={loading}
           className="btn !py-0.5 text-2xs"
         >
-          {loading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : "Inspect"}
+          {loading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Search className="w-2.5 h-2.5" />}
         </button>
       </div>
 
@@ -69,10 +99,12 @@ export function SettlementInspector() {
             type="text"
             value={txInput}
             onChange={(e) => setTxInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleInspect()}
             placeholder="Search tx hash or route ID..."
             className="input flex-1 text-2xs"
           />
         </div>
+        {error && <p className="text-2xs text-matrix-red mt-1">{error}</p>}
       </div>
 
       <div className="flex-1 p-3 overflow-y-auto space-y-2.5">

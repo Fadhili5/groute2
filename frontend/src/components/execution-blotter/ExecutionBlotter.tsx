@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { PlayCircle, Search, Zap, Send } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { useSolverStore } from "@/stores";
+import { PlayCircle, Search, Zap, Send, Loader2 } from "lucide-react";
 
 const ASSETS = ["USDC", "USDT", "ETH", "BTC", "SOL", "AVAX"];
 const CHAINS = ["Ethereum", "Arbitrum", "Base", "Solana", "Avalanche", "BNB Chain"];
@@ -20,26 +22,76 @@ export function ExecutionBlotter() {
   const [bridge, setBridge] = useState("LayerZero");
   const [mevGuard, setMevGuard] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const loadingRef = useRef(false);
+  const { addOrder } = useSolverStore();
 
-  const handleSimulate = () => {
+  const getFormParams = () => ({
+    sourceAsset,
+    destinationAsset: destAsset,
+    sourceChain,
+    destinationChain: destChain,
+    amount: parseFloat(amount) || 0,
+    privacyMode,
+    fragmentationMode: fragMode,
+    slippageTolerance: parseFloat(slippage) || 0.5,
+    bridgePreference: bridge,
+    mevGuard,
+  });
+
+  const handleSimulate = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setStatus("simulating");
-    setTimeout(() => {
+    setResult(null);
+    try {
+      const res = await api.simulate(getFormParams());
+      setResult(res);
       setStatus("simulated");
-    }, 1500);
+    } catch {
+      setStatus(null);
+    }
+    loadingRef.current = false;
   };
 
-  const handleOptimize = () => {
+  const handleOptimize = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setStatus("optimizing");
-    setTimeout(() => {
+    try {
+      const res = await api.optimize(getFormParams());
+      setResult((prev: any) => ({ ...prev, ...res }));
       setStatus("optimized");
-    }, 2000);
+    } catch {
+      setStatus(null);
+    }
+    loadingRef.current = false;
   };
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setStatus("executing");
-    setTimeout(() => {
-      setStatus("completed");
-    }, 3000);
+    try {
+      const res = await api.execute(getFormParams());
+      setResult((prev: any) => ({ ...prev, order: res }));
+      addOrder(res);
+      // Poll for completion
+      const check = setInterval(async () => {
+        try {
+          const order = await api.getOrder(res.id);
+          if (order.status === "completed") {
+            setStatus("completed");
+            setResult((prev: any) => ({ ...prev, order }));
+            clearInterval(check);
+            loadingRef.current = false;
+          }
+        } catch { clearInterval(check); loadingRef.current = false; }
+      }, 2000);
+    } catch {
+      setStatus(null);
+      loadingRef.current = false;
+    }
   };
 
   return (
@@ -53,10 +105,11 @@ export function ExecutionBlotter() {
             status === "optimized" && "bg-matrix-accent/10 text-matrix-accent",
             status === "executing" && "bg-matrix-yellow/10 text-matrix-yellow animate-pulse-slow",
             status === "completed" && "bg-matrix-green/10 text-matrix-green",
-            status === "simulating" && "bg-surface-800 text-surface-400",
-            status === "optimizing" && "bg-surface-800 text-surface-400"
+            (status === "simulating" || status === "optimizing") && "bg-surface-800 text-surface-400"
           )}>
-            {status.toUpperCase()}
+            {status === "simulating" || status === "optimizing" ? (
+              <span className="flex items-center gap-1"><Loader2 className="w-2 h-2 animate-spin" />{status.toUpperCase()}</span>
+            ) : status.toUpperCase()}
           </span>
         )}
       </div>
@@ -100,34 +153,46 @@ export function ExecutionBlotter() {
           <ToggleField label="MEV Guard" value={mevGuard} onChange={setMevGuard} />
         </div>
 
+        {result && (
+          <div className="col-span-2 bg-matrix-bg border border-surface-800 rounded-sm p-2 space-y-1">
+            <div className="text-2xs text-surface-500">Route: {result.route || result.optimizedRoute}</div>
+            {result.gas && <div className="text-2xs text-surface-400">Gas: {typeof result.gas === 'number' ? `$${result.gas.toFixed(4)}` : result.gas}</div>}
+            {result.bridgeFee && <div className="text-2xs text-surface-400">Bridge Fee: ${result.bridgeFee.toFixed(2)}</div>}
+            {result.confidence && <div className="text-2xs text-matrix-green">Confidence: {result.confidence}%</div>}
+            {result.eta && <div className="text-2xs text-surface-400">ETA: {result.eta}</div>}
+            {result.savings && <div className="text-2xs text-matrix-green">Savings: {result.savings}</div>}
+            {result.order?.txHash && (
+              <div className="text-2xs font-mono text-matrix-accent">Tx: {result.order.txHash.slice(0, 18)}...{result.order.txHash.slice(-6)}</div>
+            )}
+          </div>
+        )}
+
         <div className="col-span-2 flex items-center gap-2 pt-2">
           <button
             onClick={handleSimulate}
-            disabled={status === "executing" || status === "simulating"}
+            disabled={loadingRef.current}
             className="btn flex-1 flex items-center justify-center gap-1.5"
           >
-            <Search className="w-3 h-3" />
+            {status === "simulating" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
             Simulate
           </button>
           <button
             onClick={handleOptimize}
-            disabled={status === "executing" || status === "optimizing"}
+            disabled={loadingRef.current || !status}
             className="btn flex-1 flex items-center justify-center gap-1.5"
           >
-            <Zap className="w-3 h-3" />
+            {status === "optimizing" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
             Optimize
           </button>
           <button
             onClick={handleExecute}
-            disabled={!status || status === "executing"}
+            disabled={loadingRef.current || !status || status === "simulating" || status === "optimizing"}
             className={cn(
               "btn flex-1 flex items-center justify-center gap-1.5",
-              status === "simulated" || status === "optimized"
-                ? "btn-success"
-                : ""
+              (status === "simulated" || status === "optimized") ? "btn-success" : ""
             )}
           >
-            <Send className="w-3 h-3" />
+            {status === "executing" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
             Execute
           </button>
         </div>

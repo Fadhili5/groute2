@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridOptions, GridReadyEvent, ICellRendererParams, RowClickedEvent } from "ag-grid-community";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api-client";
 import type { Chain } from "@/types";
 
 function ChainRenderer({ data }: ICellRendererParams<Chain>) {
@@ -218,11 +219,8 @@ export function MarketMatrix() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/market/chains");
-        if (res.ok) {
-          const json = await res.json();
-          setRowData(json.chains?.length ? json.chains : CHAIN_DATA);
-        } else setRowData(CHAIN_DATA);
+        const json = await api.getChains();
+        setRowData(json.chains?.length ? json.chains : CHAIN_DATA);
       } catch { setRowData(CHAIN_DATA); }
     };
     load();

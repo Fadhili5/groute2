@@ -59,6 +59,7 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
     error InsufficientStake();
     error HeartbeatTimeout();
     error UnauthorizedRelayer();
+    error NoActiveRelayers();
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -111,7 +112,7 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
 
         relayer.lastHeartbeat = block.timestamp;
 
-        emit RelayerHeartbeat(msg.sender, block.timestamp, block.number);
+        emit RelayerHeartbeat(msg.sender, block.timestamp, block.number, signature);
     }
 
     function recordRouteResult(address relayerAddress, bytes32 routeId, bool success) external onlyRole(REGISTRY_MANAGER_ROLE) {
@@ -123,30 +124,43 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
             relayer.successfulRoutes++;
         } else {
             relayer.failedRoutes++;
-            if (relayer.failedRoutes >= SLASH_THRESHOLD) {
-                slashRelayer(relayerAddress, "Exceeded failure threshold");
+            if (relayer.failedRoutes >= SLASH_THRESHOLD && relayer.status == RelayerStatus.Active) {
+                _slash(relayerAddress, "Exceeded failure threshold");
             }
         }
 
         emit RouteCompleted(relayerAddress, routeId, success);
     }
 
-    function slashRelayer(address relayerAddress, string memory reason) internal {
+    function _slash(address relayerAddress, string memory reason) internal {
         Relayer storage relayer = relayers[relayerAddress];
+        if (relayer.status != RelayerStatus.Active) return;
+
         uint256 slashAmount = relayer.stake / 10;
         relayer.stake -= slashAmount;
         relayer.status = RelayerStatus.Slashed;
-        activeRelayers--;
+
+        if (activeRelayers > 0) {
+            activeRelayers--;
+        }
 
         emit RelayerSlashed(relayerAddress, slashAmount, reason);
+    }
+
+    function slashRelayer(address relayerAddress, string calldata reason) external onlyRole(REGISTRY_MANAGER_ROLE) {
+        _slash(relayerAddress, reason);
     }
 
     function banRelayer(address relayerAddress, string calldata reason) external onlyRole(GOVERNANCE_ROLE) {
         Relayer storage relayer = relayers[relayerAddress];
         if (relayer.relayerAddress == address(0)) revert RelayerNotFound(relayerAddress);
+        if (relayer.status == RelayerStatus.Banned) return;
+
+        if (relayer.status == RelayerStatus.Active && activeRelayers > 0) {
+            activeRelayers--;
+        }
 
         relayer.status = RelayerStatus.Banned;
-        activeRelayers--;
 
         emit RelayerBanned(relayerAddress, reason);
     }
@@ -172,7 +186,9 @@ contract RelayerRegistry is AccessControl, Pausable, ReentrancyGuard {
             if (relayer.status == RelayerStatus.Active) {
                 if (block.timestamp > relayer.lastHeartbeat + HEARTBEAT_TIMEOUT) {
                     relayer.status = RelayerStatus.Inactive;
-                    activeRelayers--;
+                    if (activeRelayers > 0) {
+                        activeRelayers--;
+                    }
                 }
             }
         }

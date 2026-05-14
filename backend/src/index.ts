@@ -9,7 +9,7 @@ import { executionRoutes } from "./routes/execution.js";
 import { settlementRoutes } from "./routes/settlement.js";
 import { routeRoutes } from "./routes/routes.js";
 import { alertRoutes } from "./routes/alerts.js";
-import { websocketHandler } from "./websocket/handler.js";
+import { websocketHandler, setRedisClient } from "./websocket/handler.js";
 import { errorHandler } from "./middleware/error.js";
 
 let prisma: any = null;
@@ -23,7 +23,7 @@ try {
 let redis: any = null;
 try {
   redis = new Redis(config.redis.url);
-  redis.on("error", () => {});
+  redis.on("error", (err: Error) => console.error("[Redis]", err.message));
 } catch {
   console.warn("Redis unavailable — running without cache.");
 }
@@ -49,6 +49,8 @@ app.register(settlementRoutes, { prefix: "/api/settlement", prisma, redis });
 app.register(routeRoutes, { prefix: "/api/routes", prisma, redis });
 app.register(alertRoutes, { prefix: "/api/alerts", prisma, redis });
 
+setRedisClient(redis);
+
 app.register(async function (fastify) {
   fastify.get("/ws", { websocket: true }, websocketHandler);
 });
@@ -60,11 +62,14 @@ app.get("/api/health", async () => ({
 }));
 
 app.get("/api/kpi", async () => {
+  if (!prisma) {
+    return { tvl: 847_000_000, volume24h: 234_000_000, routesExecuted: 1847, mevProtected: 98.5 };
+  }
   const [chains, routeCount] = await Promise.all([
-    prisma.chain.findMany({ select: { liquidity: true } }),
-    prisma.route.count(),
+    (prisma as any).chain.findMany({ select: { liquidity: true } }),
+    (prisma as any).route.count(),
   ]);
-  const tvl = chains.reduce((sum, c) => sum + c.liquidity, 0);
+  const tvl = chains.reduce((sum: number, c: any) => sum + c.liquidity, 0);
   return {
     tvl,
     volume24h: Math.round(tvl * 0.278),
@@ -90,12 +95,23 @@ app.get("/api/chains", async () => {
   return chains;
 });
 
-app.get("/api/system/health", async () => ({
-  network: "connected",
-  relayers: 12,
-  blockHeight: 19876543,
-  apiHealth: "healthy",
-}));
+app.get("/api/system/health", async () => {
+  const dbOk = prisma !== null;
+  const redisOk = redis !== null;
+  let blockHeight = 19876543;
+  try {
+    if (redisOk) {
+      const cached = await redis.get("system:blockHeight");
+      if (cached) blockHeight = parseInt(cached, 10);
+    }
+  } catch { /* use default */ }
+  return {
+    network: dbOk ? "connected" : "degraded",
+    relayers: 12,
+    blockHeight,
+    apiHealth: dbOk && redisOk ? "healthy" : "degraded",
+  };
+});
 
 const start = async () => {
   try {
