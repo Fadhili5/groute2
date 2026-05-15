@@ -8,3 +8,6 @@ frontend/.env.local
 backend/node_modules/
 contracts/node_modules/
 *.log
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
