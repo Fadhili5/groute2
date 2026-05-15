@@ -168,6 +168,10 @@ class ApiClient {
   async getSolverStats(): Promise<any> {
     return this.fetch("/solver/stats");
   }
+
+  async registerSolver(data: { address: string; name: string; stakeAmount: number }): Promise<any> {
+    return this.fetch("/solver/register", { method: "POST", body: JSON.stringify(data) });
+  }
 }
 
 export const api = new ApiClient(API_BASE);

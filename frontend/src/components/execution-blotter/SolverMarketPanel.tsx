@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useSolverMarketStore } from "@/stores/solver-market-store";
 import { 
   Gavel, Clock, CheckCircle2, XCircle, Loader2, Crown, Plus, 
-  RefreshCw, TrendingUp, Users, Zap, AlertCircle 
+  RefreshCw, TrendingUp, Users, Zap, AlertCircle, Wallet, UserPlus 
 } from "lucide-react";
 
 interface AuctionFormData {
@@ -42,6 +42,12 @@ export function SolverMarketPanel() {
     executionTime: 3,
     routeId: "",
   });
+  const [showRegisterSolver, setShowRegisterSolver] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    address: "",
+    name: "",
+    stakeAmount: 50,
+  });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -60,6 +66,7 @@ export function SolverMarketPanel() {
     createAuction,
     submitBid,
     settleAuction,
+    registerSolver,
     setSelectedAuction,
   } = useSolverMarketStore();
 
@@ -125,6 +132,33 @@ export function SolverMarketPanel() {
       await settleAuction(selectedAuction.id);
       setSuccess("Auction settled!");
       fetchAuctions();
+      fetchLeaderboard();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const handleRegisterSolver = async () => {
+    setError(null);
+    if (!registerForm.address || !registerForm.name || registerForm.stakeAmount < 50) {
+      setError("Address, name required, stake must be >= 50");
+      return;
+    }
+    if (!registerForm.address.startsWith("0x") || registerForm.address.length !== 42) {
+      setError("Invalid Ethereum address format");
+      return;
+    }
+    try {
+      await registerSolver({
+        address: registerForm.address,
+        name: registerForm.name,
+        stakeAmount: registerForm.stakeAmount,
+      });
+      setSuccess(`Solver "${registerForm.name}" registered successfully!`);
+      setShowRegisterSolver(false);
+      setRegisterForm({ address: "", name: "", stakeAmount: 50 });
+      fetchSolvers();
       fetchLeaderboard();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) {
@@ -210,13 +244,22 @@ export function SolverMarketPanel() {
             {/* Auctions Tab */}
             {activeTab === "auctions" && (
               <div className="space-y-2">
-                <button
-                  onClick={() => setShowCreateAuction(true)}
-                  className="w-full py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Create Auction
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCreateAuction(true)}
+                    className="flex-1 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Create Auction
+                  </button>
+                  <button
+                    onClick={() => setShowRegisterSolver(true)}
+                    className="flex-1 py-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-xs font-medium hover:bg-green-500/20 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Register Solver
+                  </button>
+                </div>
 
                 {auctions.length === 0 ? (
                   <div className="text-center py-8">
@@ -515,6 +558,75 @@ export function SolverMarketPanel() {
                 className="flex-1 py-1.5 bg-cyan-500 rounded text-xs text-black font-medium hover:bg-cyan-400"
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Register Solver Modal */}
+      {showRegisterSolver && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#0a0e17] border border-[#1a2332] rounded-lg p-4 w-80">
+            <h3 className="text-sm font-medium text-gray-200 mb-3 flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-green-400" />
+              Register as Solver
+            </h3>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Wallet Address (0x...)</label>
+                <input
+                  type="text"
+                  value={registerForm.address}
+                  onChange={(e) => setRegisterForm({ ...registerForm, address: e.target.value })}
+                  className="w-full bg-[#0d1117] border border-[#1a2332] rounded px-2 py-1 text-xs text-gray-300 font-mono"
+                  placeholder="0x742d35Cc6634C0532925a3b844Bc9e7595f8E1a1"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Solver Name</label>
+                <input
+                  type="text"
+                  value={registerForm.name}
+                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+                  className="w-full bg-[#0d1117] border border-[#1a2332] rounded px-2 py-1 text-xs text-gray-300"
+                  placeholder="My Solver"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Stake Amount (ETH)</label>
+                <input
+                  type="number"
+                  value={registerForm.stakeAmount}
+                  onChange={(e) => setRegisterForm({ ...registerForm, stakeAmount: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-[#0d1117] border border-[#1a2332] rounded px-2 py-1 text-xs text-gray-300"
+                  min="50"
+                />
+                <span className="text-2xs text-gray-600">Minimum 50 ETH required</span>
+              </div>
+              <div className="bg-[#0d1117] p-2 rounded border border-[#1a2332]">
+                <span className="text-2xs text-gray-500 block mb-1">Demo Address:</span>
+                <button
+                  type="button"
+                  onClick={() => setRegisterForm({ ...registerForm, address: "0x742d35Cc6634C0532925a3b844Bc9e7595f8E1a1" })}
+                  className="text-xs text-cyan-400 hover:text-cyan-300 font-mono"
+                >
+                  0x742d35Cc6634C0532925a3b844Bc9e7595f8E1a1
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setShowRegisterSolver(false)}
+                className="flex-1 py-1.5 bg-surface-800 rounded text-xs text-gray-400 hover:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRegisterSolver}
+                className="flex-1 py-1.5 bg-green-500 rounded text-xs text-black font-medium hover:bg-green-400"
+              >
+                Register
               </button>
             </div>
           </div>

@@ -57,6 +57,7 @@ interface SolverMarketState {
   createAuction: (data: { intentId: string; tokenIn: string; tokenOut: string; amountIn: number; startPrice: number }) => Promise<Auction>;
   submitBid: (data: { auctionId: string; price: number; estimatedGas: number; executionTime: number; routeId: string }) => Promise<Bid>;
   settleAuction: (auctionId: string) => Promise<any>;
+  registerSolver: (data: { address: string; name: string; stakeAmount: number }) => Promise<Solver>;
   setSelectedAuction: (auction: Auction | null) => void;
 }
 
@@ -129,6 +130,12 @@ export const useSolverMarketStore = create<SolverMarketState>((set, get) => ({
     const updated = auctions.map((a) => (a.id === auctionId ? { ...a, ...result } : a));
     set({ auctions: updated });
     return result;
+  },
+
+  registerSolver: async (data) => {
+    const result = await api.registerSolver(data);
+    set((s) => ({ solvers: [...s.solvers, result.solver] }));
+    return result.solver;
   },
 
   setSelectedAuction: (auction) => set({ selectedAuction: auction }),

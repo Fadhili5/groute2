@@ -202,6 +202,36 @@ export async function solverRoutes(app: FastifyInstance, opts: RouteOptions) {
     return { ...solver, auctions: solverAuctions.length, bids: BIDS.size };
   });
 
+  app.post("/register", async (request, reply) => {
+    const { address, name, stakeAmount } = request.body as { address: string; name: string; stakeAmount: number };
+    
+    if (!address || !name || !stakeAmount) {
+      return reply.status(400).send({ error: { code: "INVALID_PARAMS", message: "Address, name, and stakeAmount required" } });
+    }
+
+    const id = `solver-${uuid().slice(0, 8)}`;
+    const newSolver: Solver = {
+      id,
+      address,
+      name,
+      stakedAmount: stakeAmount,
+      totalSolved: 0,
+      successRate: 100,
+      averageExecutionTime: 0,
+      isActive: true,
+      registeredAt: Date.now(),
+    };
+
+    SOLVERS.set(id, newSolver);
+    publish("solver", {
+      type: "solver_registered",
+      channel: "solver",
+      data: newSolver,
+    });
+
+    return { success: true, solver: newSolver };
+  });
+
   app.post("/auctions", async (request, reply) => {
     const data = createAuctionSchema.parse(request.body);
 
