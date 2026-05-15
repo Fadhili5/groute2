@@ -11,3 +11,4 @@ contracts/node_modules/
 contracts/artifacts/
 contracts/cache/
 contracts/typechain-types/
+backend/dist/

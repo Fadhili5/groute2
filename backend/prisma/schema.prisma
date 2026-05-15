@@ -3,14 +3,11 @@ generator client {
   previewFeatures = ["fullTextSearch", "postgresqlExtensions"]
 }
 
-generator dbml {
-  provider = "prisma-dbml-generator"
-}
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [citext, pgcrypto, timescaledb]
+  extensions = [citext, pgcrypto]
 }
 
 // =============================================================================
@@ -178,6 +175,7 @@ model User {
   approvalActions     ApprovalWorkflow[]      @relation("ApprovalApprover")
   aiChats             AiChat[]
   permissionAudits    PermissionAudit[]
+  reviewedAudits      PermissionAudit[]      @relation("PermissionReviewer")
   auditLogs           AuditLog[]
 
   @@map("users")
@@ -297,7 +295,8 @@ model Route {
 
   settlements           Settlement[]
   pathHistory           PathHistory[]
-  rerouteEvents         RerouteEvent[]
+  oldRouteEvents        RerouteEvent[]         @relation("OldRoute")
+  newRouteEvents        RerouteEvent[]         @relation("NewRoute")
   strategyExecutionLogs StrategyExecutionLog[]
   performanceHistory    RoutePerformanceHistory[]
 
@@ -358,8 +357,9 @@ model IntentFragment {
   txHash    String?              @map("tx_hash")
   metadata  Json?                @map("metadata")
 
-  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
-  traces FragmentTrace[]
+  intent        Intent                 @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  traces        FragmentTrace[]
+  stateMachines FragmentStateMachine[]
 
   @@index([intentId])
   @@index([state])
@@ -380,8 +380,9 @@ model SolverBid {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
-  solver SolverProfile? @relation(fields: [solverId], references: [id])
+  intent     Intent         @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  solver     SolverProfile? @relation(fields: [solverId], references: [id])
+  wonAuction Auction?
 
   @@index([intentId, state])
   @@index([solverId])
@@ -395,7 +396,7 @@ model Auction {
   startTime     DateTime     @map("start_time")
   endTime       DateTime     @map("end_time")
   minBid        Float?       @map("min_bid")
-  winningBidId  String?      @map("winning_bid_id")
+  winningBidId  String?      @unique @map("winning_bid_id")
   state         AuctionState @default(pending) @map("state")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -485,6 +486,7 @@ model Settlement {
   blockNumber     Int?            @map("block_number")
   finalityRisk    Float?          @default(0) @map("finality_risk")
   metadata        Json?           @map("metadata")
+  createdAt       DateTime        @default(now()) @map("created_at")
 
   sourceChain Chain @relation("SettlementSource", fields: [sourceChainId], references: [id])
   destChain   Chain @relation("SettlementDest", fields: [destChainId], references: [id])
@@ -515,7 +517,6 @@ model ZkProof {
   settlement    Settlement             @relation(fields: [settlementId], references: [id], onDelete: Cascade)
   attestations  VerifierAttestation[]
   chainLinks    AttestationChain[]     @relation("ChildAttestation")
-  parentLink    AttestationChain?      @relation("ParentAttestation")
 
   @@map("zk_proofs")
 }
@@ -543,8 +544,9 @@ model AttestationChain {
   depth                 Int      @default(0) @map("depth")
   createdAt             DateTime @default(now()) @map("created_at")
 
-  zkProof       ZkProof           @relation("ChildAttestation", fields: [zkProofId], references: [id], onDelete: Cascade)
-  previousAttestation AttestationChain? @relation("ParentAttestation", fields: [previousAttestationId], references: [id])
+  zkProof             ZkProof           @relation("ChildAttestation", fields: [zkProofId], references: [id], onDelete: Cascade)
+  previousAttestation AttestationChain?  @relation("ParentAttestation", fields: [previousAttestationId], references: [id])
+  childAttestations   AttestationChain[] @relation("ParentAttestation")
 
   @@index([zkProofId])
   @@index([root])
@@ -694,8 +696,10 @@ model GraphNode {
 
   chain Chain @relation(fields: [chainId], references: [id])
 
-  sourceEdges GraphEdge[] @relation("SourceNode")
-  destEdges   GraphEdge[] @relation("DestNode")
+  sourceEdges GraphEdge[]   @relation("SourceNode")
+  destEdges   GraphEdge[]   @relation("DestNode")
+  sourcePaths PathHistory[] @relation("PathSource")
+  destPaths   PathHistory[] @relation("PathDest")
 
   @@unique([chainId, token, nodeType])
   @@index([chainId])
