@@ -305,13 +305,16 @@ export async function solverRoutes(app: FastifyInstance, opts: RouteOptions) {
       return reply.status(400).send({ error: { code: "AUCTION_ENDED", message: "Auction deadline passed" } });
     }
 
-    const solvers = Array.from(SOLVERS.values());
-    const randomSolver = solvers[Math.floor(Math.random() * solvers.length)];
+    const solvers = Array.from(SOLVERS.values()).filter((s) => s.isActive).sort((a, b) => a.averageExecutionTime - b.averageExecutionTime);
+    if (!solvers.length) {
+      return reply.status(503).send({ error: { code: "NO_ACTIVE_SOLVERS", message: "No active solver available for bidding" } });
+    }
+    const selectedSolver = solvers[0];
 
     const bid: Bid = {
       id: uuid(),
       auctionId: id,
-      solver: randomSolver.address,
+      solver: selectedSolver.address,
       price: data.price,
       estimatedGas: data.estimatedGas,
       executionTime: data.executionTime,

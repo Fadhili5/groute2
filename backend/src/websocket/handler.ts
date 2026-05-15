@@ -1,6 +1,7 @@
 import { FastifyRequest } from "fastify";
 import { WebSocket } from "ws";
 import { Redis } from "ioredis";
+import { randomUUID } from "crypto";
 
 interface Client {
   ws: WebSocket;
@@ -41,7 +42,7 @@ function broadcast(channel: string, event: any) {
 }
 
 export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
-  const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const clientId = `client_${randomUUID()}`;
 
   const client: Client = {
     ws: socket,
@@ -82,81 +83,16 @@ export function websocketHandler(socket: WebSocket, request: FastifyRequest) {
 
   socket.on("close", () => {
     clients.delete(clientId);
-    clearInterval(interval);
   });
 
   socket.on("error", () => {
     clients.delete(clientId);
-    clearInterval(interval);
   });
 
   socket.send(JSON.stringify({
     type: "connected",
     clientId,
     timestamp: Date.now(),
-    channels: ["market", "execution", "settlement", "alerts"],
+    channels: ["market", "execution", "settlement", "alerts", "solver"],
   }));
-
-  const interval = setInterval(() => {
-    if (socket.readyState === WebSocket.OPEN) {
-      const events = generateEvent();
-      if (client.subscriptions.has(events.channel) || client.subscriptions.size === 0) {
-        socket.send(JSON.stringify(events));
-      }
-    }
-  }, 3000);
-}
-
-function generateEvent() {
-  const channels = ["market", "execution", "settlement", "alerts"];
-  const channel = channels[Math.floor(Math.random() * channels.length)];
-
-  const events: Record<string, () => any> = {
-    market: () => ({
-      type: "market_update",
-      channel: "market",
-      data: {
-        chain: ["Ethereum", "Arbitrum", "Base", "Solana"][Math.floor(Math.random() * 4)],
-        gas: (Math.random() * 50 + 0.1).toFixed(2),
-        liquidity: Math.floor(Math.random() * 1000000),
-        spread: (Math.random() * 0.1).toFixed(3),
-      },
-    }),
-    execution: () => ({
-      type: "execution_update",
-      channel: "execution",
-      data: {
-        id: `0x${Math.random().toString(16).slice(2, 10)}`,
-        status: ["simulating", "executing", "completed", "failed"][Math.floor(Math.random() * 4)],
-        progress: Math.floor(Math.random() * 100),
-      },
-    }),
-    settlement: () => ({
-      type: "settlement_update",
-      channel: "settlement",
-      data: {
-        txHash: `0x${Math.random().toString(16).slice(2, 18)}`,
-        state: ["pending", "confirmed", "finalized"][Math.floor(Math.random() * 3)],
-        confirmations: Math.floor(Math.random() * 64),
-      },
-    }),
-    alerts: () => ({
-      type: "alert",
-      channel: "alerts",
-      data: {
-        id: `ws-${Date.now()}`,
-        severity: ["info", "warning", "critical"][Math.floor(Math.random() * 3)],
-        message: [
-          "Route completed successfully",
-          "Gas price spike detected",
-          "New MEV activity on mempool",
-          "Bridge relay delayed",
-          "Liquidity depth increased",
-        ][Math.floor(Math.random() * 5)],
-        timestamp: Date.now(),
-      },
-    }),
-  };
-
-  return events[channel]();
 }

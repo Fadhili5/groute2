@@ -10,24 +10,17 @@ import { LiquidityHeatmap } from "@/components/liquidity-heatmap/LiquidityHeatma
 import { SettlementInspector } from "@/components/settlement-inspector/SettlementInspector";
 import { CommandTerminal } from "@/components/command-terminal/CommandTerminal";
 import { AlertsFeed } from "@/components/alerts-feed/AlertsFeed";
-import { Watchlist } from "@/components/watchlist/Watchlist";
+import { RecentExecutions } from "@/components/recent-executions/RecentExecutions";
 import { TerminalShell } from "@/components/layout/TerminalShell";
 
 const TABS = [
-  { id: "market", label: "MARKET", module: "MarketMatrix" },
-  { id: "execution", label: "EXECUTION", module: "ExecutionBlotter" },
-  { id: "routes", label: "ROUTES", module: "RouteVisualizer" },
-  { id: "liquidity", label: "LIQUIDITY", module: "LiquidityHeatmap" },
-  { id: "settlement", label: "SETTLEMENT", module: "SettlementInspector" },
-  { id: "terminal", label: "TERMINAL", module: "CommandTerminal" },
-  { id: "alerts", label: "ALERTS", module: "AlertsFeed" },
-  { id: "watchlist", label: "WATCHLIST", module: "Watchlist" },
+  { id: "top", label: "TOP", module: "Top" },
+  { id: "middle", label: "MIDDLE", module: "Middle" },
+  { id: "bottom", label: "BOTTOM", module: "Bottom" },
 ];
 
-const SIDEBAR_MODULES = ["AiSolver"];
-
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("market");
+  const [activeTab, setActiveTab] = useState("top");
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -47,11 +40,22 @@ export default function Home() {
           <span className="text-xs font-semibold text-surface-200 ml-2">GhostRoute</span>
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          {activeTab === "market" && <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>}
-          {activeTab === "execution" && <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>}
-          {activeTab === "routes" && <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>}
-          {activeTab === "liquidity" && <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>}
+        <div className="flex-1 overflow-hidden px-2 py-2">
+          {activeTab === "top" && (
+            <div className="grid grid-cols-12 gap-2 h-full">
+              <div className="col-span-12 min-h-0"><ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary></div>
+            </div>
+          )}
+          {activeTab === "middle" && (
+            <div className="grid grid-cols-12 gap-2 h-full">
+              <div className="col-span-12 min-h-0"><ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary></div>
+            </div>
+          )}
+          {activeTab === "bottom" && (
+            <div className="grid grid-cols-12 gap-2 h-full">
+              <div className="col-span-12 min-h-0"><ErrorBoundary name="Command Terminal"><CommandTerminal /></ErrorBoundary></div>
+            </div>
+          )}
         </div>
 
         <div className="flex-shrink-0 bg-matrix-card border-t border-matrix-border">
@@ -71,54 +75,37 @@ export default function Home() {
     );
   }
 
-  const renderModule = (module: string) => {
-    switch (module) {
-      case "MarketMatrix": return <MarketMatrix />;
-      case "RouteVisualizer": return <RouteVisualizer />;
-      case "ExecutionBlotter": return <ExecutionBlotter />;
-      case "LiquidityHeatmap": return <LiquidityHeatmap />;
-      case "SettlementInspector": return <SettlementInspector />;
-      case "CommandTerminal": return <CommandTerminal />;
-      case "AlertsFeed": return <AlertsFeed />;
-      case "Watchlist": return <Watchlist />;
-      default: return null;
-    }
-  };
-
   return (
     <TerminalShell>
-      <div className="flex h-full gap-4">
-        <div className="flex-1 flex flex-col min-w-0">
-          <nav className="flex gap-1 mb-4 px-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-xs font-medium transition-colors border-b-2 ${
-                  activeTab === tab.id
-                    ? "text-surface-200 border-matrix-green"
-                    : "text-surface-500 border-transparent hover:text-surface-400"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-          
-          <div className="flex-1 min-h-0">
-            <ErrorBoundary name={activeTab}>
-              {renderModule(TABS.find(t => t.id === activeTab)?.module || "MarketMatrix")}
-            </ErrorBoundary>
-          </div>
+      <div className="grid grid-cols-12 grid-rows-3 gap-2 h-full">
+        <div className="col-span-6 row-span-1 min-h-0">
+          <ErrorBoundary name="Market Matrix"><MarketMatrix /></ErrorBoundary>
+        </div>
+        <div className="col-span-3 row-span-1 min-h-0">
+          <ErrorBoundary name="Route Visualizer"><RouteVisualizer /></ErrorBoundary>
+        </div>
+        <div className="col-span-3 row-span-1 min-h-0">
+          <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
         </div>
 
-        <div className="w-80 flex flex-col gap-4 flex-shrink-0">
-          <div className="flex-shrink-0">
-            <ErrorBoundary name="AI Solver"><AiSolver /></ErrorBoundary>
-          </div>
-          <div className="flex-1 min-h-0">
-            <ErrorBoundary name="Watchlist"><Watchlist /></ErrorBoundary>
-          </div>
+        <div className="col-span-5 row-span-1 min-h-0">
+          <ErrorBoundary name="Execution Blotter"><ExecutionBlotter /></ErrorBoundary>
+        </div>
+        <div className="col-span-4 row-span-1 min-h-0">
+          <ErrorBoundary name="Liquidity Heatmap"><LiquidityHeatmap /></ErrorBoundary>
+        </div>
+        <div className="col-span-3 row-span-1 min-h-0">
+          <ErrorBoundary name="Settlement Inspector"><SettlementInspector /></ErrorBoundary>
+        </div>
+
+        <div className="col-span-5 row-span-1 min-h-0">
+          <ErrorBoundary name="Command Terminal"><CommandTerminal /></ErrorBoundary>
+        </div>
+        <div className="col-span-3 row-span-1 min-h-0">
+          <ErrorBoundary name="Alerts Feed"><AlertsFeed /></ErrorBoundary>
+        </div>
+        <div className="col-span-4 row-span-1 min-h-0">
+          <ErrorBoundary name="Recent Executions"><RecentExecutions /></ErrorBoundary>
         </div>
       </div>
     </TerminalShell>

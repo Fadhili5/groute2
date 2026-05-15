@@ -4,9 +4,12 @@ import { Redis } from "ioredis";
 import { z } from "zod";
 import { v4 as uuid } from "uuid";
 import { publish } from "../websocket/handler.js";
+import { AppError } from "../middleware/error.js";
+import { getGasPrice } from "../services/rpc-provider.js";
+import { getTokenPrice } from "../services/price-feed.js";
 
 interface RouteOptions {
-  prisma: PrismaClient | null;
+  prisma: PrismaClient;
   redis: Redis | null;
 }
 
@@ -23,17 +26,30 @@ const simulateSchema = z.object({
   mevGuard: z.boolean(),
 });
 
-const CHAIN_GAS_MAP: Record<string, number> = {
-  ethereum: 12.4, arbitrum: 0.08, base: 0.06, solana: 0.0002, avalanche: 0.15, bnb: 0.04,
-  Ethereum: 12.4, Arbitrum: 0.08, Base: 0.06, Solana: 0.0002, Avalanche: 0.15, "BNB Chain": 0.04,
+const CHAIN_KEY_MAP: Record<string, string> = {
+  ethereum: "ethereum",
+  arbitrum: "arbitrum",
+  base: "base",
+  solana: "solana",
+  avalanche: "avalanche",
+  bnb: "bnb",
+  "bnb chain": "bnb",
 };
 
-function estimateCost(data: z.infer<typeof simulateSchema>) {
-  const baseGas = CHAIN_GAS_MAP[data.sourceChain] || 5;
-  const gasCost = baseGas * data.amount * 0.0001;
-  const bridgeFee = data.amount * 0.0005;
-  const slippageVal = data.amount * (data.slippageTolerance / 100) * 0.001;
-  const totalFee = data.amount * 0.003;
+const NATIVE_SYMBOL: Record<string, string> = {
+  ethereum: "ETH",
+  arbitrum: "ETH",
+  base: "ETH",
+  solana: "SOL",
+  avalanche: "AVAX",
+  bnb: "BNB",
+};
+
+function estimateCost(data: z.infer<typeof simulateSchema>, gasUsd: number, bridgeFeeRate: number) {
+  const gasCost = gasUsd;
+  const bridgeFee = data.amount * bridgeFeeRate;
+  const slippageVal = data.amount * (data.slippageTolerance / 100) * 0.0005;
+  const totalFee = data.amount * 0.001;
   const privacyOverhead = data.privacyMode ? 1.15 : 1.0;
   const fragOverhead = data.fragmentationMode ? 1.05 : 1.0;
   return {
@@ -52,37 +68,67 @@ function estimateFragments(amount: number, fragMode: boolean): number {
   return 2;
 }
 
-function estimateConfidence(amount: number, mevGuard: boolean): number {
+function estimateConfidence(amount: number, mevGuard: boolean, routeSuccessRate: number): number {
   const base = 94;
   const sizePenalty = Math.min(amount / 10_000_000, 0.15) * 100;
   const mevBonus = mevGuard ? 3 : 0;
-  return Math.min(99, Math.max(75, base - sizePenalty + mevBonus));
-}
-
-function generateOrderId(): string {
-  return `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`;
+  return Math.min(99, Math.max(70, (base - sizePenalty + mevBonus + routeSuccessRate * 0.05)));
 }
 
 const ORDERS = new Map<string, any>();
 
+async function getLiveGasUsd(chainInput: string): Promise<number> {
+  const key = CHAIN_KEY_MAP[chainInput.toLowerCase()] ?? chainInput.toLowerCase();
+  const gasPrice = await getGasPrice(key);
+  const symbol = NATIVE_SYMBOL[key] ?? "ETH";
+  const nativePrice = await getTokenPrice(symbol);
+  if (gasPrice === null || nativePrice === null) {
+    throw new AppError(503, "LIVE_GAS_UNAVAILABLE", `Unable to fetch live gas for chain ${chainInput}`);
+  }
+
+  const gasGwei = Number(gasPrice) / 1e9;
+  const estimatedGasUnits = 210000;
+  const gasNative = (gasGwei * estimatedGasUnits) / 1e9;
+  return gasNative * nativePrice;
+}
+
 export async function executionRoutes(app: FastifyInstance, opts: RouteOptions) {
   app.post("/simulate", async (request, reply) => {
     const data = simulateSchema.parse(request.body);
-    const cost = estimateCost(data);
+    const sourceChain = await opts.prisma.chain.findFirst({
+      where: { OR: [{ name: data.sourceChain }, { shortName: data.sourceChain.toUpperCase() }] },
+    });
+    if (!sourceChain) {
+      throw new AppError(404, "CHAIN_NOT_FOUND", `Source chain ${data.sourceChain} not found`);
+    }
+
+    const route = await opts.prisma.route.findFirst({
+      where: {
+        sourceChain: { name: data.sourceChain },
+        destChain: { name: data.destinationChain },
+        status: "active",
+      },
+      orderBy: [{ successRate: "desc" }, { avgLatency: "asc" }],
+    });
+    if (!route) {
+      throw new AppError(404, "ROUTE_NOT_AVAILABLE", `No active route from ${data.sourceChain} to ${data.destinationChain}`);
+    }
+
+    const gasUsd = await getLiveGasUsd(data.sourceChain);
+    const cost = estimateCost(data, gasUsd, sourceChain.bridgeFee || 0.0005);
     const fragments = estimateFragments(data.amount, data.fragmentationMode);
-    const confidence = estimateConfidence(data.amount, data.mevGuard);
-    const etaBase = data.sourceChain === data.destinationChain ? 2 : 8;
-    const etaVar = Math.random() * 5;
+    const confidence = estimateConfidence(data.amount, data.mevGuard, route.successRate);
+    const etaSeconds = Math.max(1, Math.round(route.avgLatency));
 
     const result = {
       id: uuid(),
       gas: parseFloat(cost.gas.toFixed(6)),
       bridgeFee: parseFloat(cost.bridgeFee.toFixed(4)),
       slippage: parseFloat(cost.slippage.toFixed(4)),
-      eta: `${(etaBase + etaVar).toFixed(1)}s`,
+      eta: `${etaSeconds}s`,
       confidence: parseFloat(confidence.toFixed(1)),
       fragments,
-      route: `${data.sourceAsset} → ${data.destinationAsset} via ${data.bridgePreference}`,
+      route: `${data.sourceAsset} → ${data.destinationAsset} via ${route.name}`,
       fee: parseFloat(cost.fee.toFixed(4)),
       total: parseFloat(cost.total.toFixed(4)),
     };
@@ -96,20 +142,35 @@ export async function executionRoutes(app: FastifyInstance, opts: RouteOptions) 
   app.post("/optimize", async (request, reply) => {
     const data = simulateSchema.parse(request.body);
 
-    const bridges = ["LayerZero", "Across", "Stargate", "Hop", "CCTP"];
-    const selectedBridges = bridges.slice(0, Math.floor(Math.random() * 3) + 1);
-    const confidence = estimateConfidence(data.amount, data.mevGuard);
-    const gas = CHAIN_GAS_MAP[data.sourceChain] || 1;
+    const routes = await opts.prisma.route.findMany({
+      where: {
+        sourceChain: { name: data.sourceChain },
+        destChain: { name: data.destinationChain },
+        status: "active",
+      },
+      orderBy: [{ successRate: "desc" }, { avgLatency: "asc" }],
+      take: 3,
+      include: { sourceChain: true, destChain: true },
+    });
+
+    if (!routes.length) {
+      throw new AppError(404, "ROUTE_NOT_AVAILABLE", `No active routes from ${data.sourceChain} to ${data.destinationChain}`);
+    }
+
+    const best = routes[0];
+    const gasUsd = await getLiveGasUsd(data.sourceChain);
+    const confidence = estimateConfidence(data.amount, data.mevGuard, best.successRate);
+    const savings = Math.max(0, ((routes[routes.length - 1].avgLatency - best.avgLatency) / Math.max(routes[routes.length - 1].avgLatency, 1)) * 100);
 
     const result = {
       id: uuid(),
-      optimizedRoute: `${data.sourceChain} → ${selectedBridges[0]} → ${data.destinationChain}`,
-      gas: `${(gas * (0.8 + Math.random() * 0.4)).toFixed(2)} gwei`,
-      savings: `${(Math.random() * 25 + 5).toFixed(1)}%`,
+      optimizedRoute: `${best.sourceChain.name} → ${best.name} → ${best.destChain.name}`,
+      gas: `$${gasUsd.toFixed(2)}`,
+      savings: `${savings.toFixed(1)}%`,
       confidence: Math.min(99, confidence + 2),
-      bridges: selectedBridges,
+      bridges: routes.map((r) => r.name),
       fragments: estimateFragments(data.amount, data.fragmentationMode),
-      privacyScore: data.privacyMode ? Math.floor(Math.random() * 20 + 75) : Math.floor(Math.random() * 20 + 50),
+      privacyScore: data.privacyMode ? 88 : 62,
     };
 
     if (opts.redis) {
@@ -122,17 +183,16 @@ export async function executionRoutes(app: FastifyInstance, opts: RouteOptions) 
     const data = simulateSchema.parse(request.body);
 
     const orderId = uuid();
-    const txHash = generateOrderId();
     const fragments = estimateFragments(data.amount, data.fragmentationMode);
 
-    const order = {
+    const order: any = {
       id: orderId,
       ...data,
       status: "executing",
-      txHash,
+      txHash: null,
       fragments,
-      progress: 0,
-      stage: "submitting",
+      progress: 5,
+      stage: "validating",
       timestamp: Date.now(),
     };
 
@@ -147,42 +207,44 @@ export async function executionRoutes(app: FastifyInstance, opts: RouteOptions) 
       publish("execution", {
         type: "execution_update",
         channel: "execution",
-        data: { id: orderId, stage, status, progress, txHash, ...extra },
+        data: { id: orderId, stage, status, progress, ...extra },
       });
     };
 
     await saveOrder(order);
-    emitStatus("submitting", "executing", 0);
+    emitStatus("validating", "executing", 5);
 
-    // Real-time multi-stage execution simulation
-    const stages = [
-      { delay: 800, stage: "validating", status: "executing", progress: 10, label: "Validating route parameters" },
-      { delay: 1200, stage: "quoting", status: "executing", progress: 25, label: "Fetching quotes from DEX aggregators" },
-      { delay: 1000, stage: "splitting", status: "executing", progress: 40, label: `Splitting order into ${fragments} fragments` },
-      { delay: 1500, stage: "bridging", status: "executing", progress: 60, label: `Bridging via ${data.bridgePreference}` },
-      { delay: 1000, stage: "swapping", status: "executing", progress: 80, label: "Executing DEX swaps" },
-      { delay: 1000, stage: "settling", status: "executing", progress: 90, label: "Submitting settlement proof" },
-      { delay: 800, stage: "complete", status: "completed", progress: 100, label: "Order settled successfully" },
-    ];
-
-    let totalDelay = 0;
-    for (const s of stages) {
-      totalDelay += s.delay;
-      const stageConfig = s;
-      setTimeout(async () => {
-        order.status = stageConfig.status;
-        order.stage = stageConfig.stage;
-        order.progress = stageConfig.progress;
-        emitStatus(stageConfig.stage, stageConfig.status, stageConfig.progress, { label: stageConfig.label });
-
-        if (stageConfig.status === "completed") {
-          order.status = "completed";
-          await saveOrder(order);
-        } else {
-          await saveOrder(order);
-        }
-      }, totalDelay);
+    const source = await opts.prisma.chain.findFirst({ where: { OR: [{ name: data.sourceChain }, { shortName: data.sourceChain.toUpperCase() }] } });
+    const destination = await opts.prisma.chain.findFirst({ where: { OR: [{ name: data.destinationChain }, { shortName: data.destinationChain.toUpperCase() }] } });
+    if (!source || !destination) {
+      order.status = "failed";
+      order.stage = "validation_failed";
+      order.progress = 100;
+      await saveOrder(order);
+      emitStatus("validation_failed", "failed", 100, { label: "Chain validation failed" });
+      return order;
     }
+
+    emitStatus("quoting", "executing", 30, { label: "Fetching live route quotes" });
+    const route = await opts.prisma.route.findFirst({
+      where: { sourceChainId: source.id, destChainId: destination.id, status: "active" },
+      orderBy: [{ successRate: "desc" }, { avgLatency: "asc" }],
+    });
+    if (!route) {
+      order.status = "failed";
+      order.stage = "routing_failed";
+      order.progress = 100;
+      await saveOrder(order);
+      emitStatus("routing_failed", "failed", 100, { label: "No active route available" });
+      return order;
+    }
+
+    emitStatus("routing", "executing", 70, { label: "Routing execution to relayer" });
+    order.stage = "queued";
+    order.progress = 85;
+    order.routeId = route.id;
+    await saveOrder(order);
+    emitStatus("queued", "executing", 85, { label: "Queued for relayer submission", routeId: route.id });
 
     return order;
   });
