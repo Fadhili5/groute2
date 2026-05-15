@@ -82,7 +82,7 @@ GhostRoute Terminal is a unified institutional execution console for cross-chain
               │
               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Smart Contracts (8)                        │
+│                   Smart Contracts (9)                        │
 │                                                              │
 │  IntentRouter · FragmentVault · RouteRegistry                │
 │  SettlementVerifier · PrivacyScoreOracle                     │
@@ -149,61 +149,57 @@ See [docs/walkthrough.md](docs/walkthrough.md) for the complete end-to-end walkt
 
 ---
 
-## Modules (9 Frontend Components)
+## Modules (10 Frontend Components)
 
 ### 1. Market Matrix
 Real-time chain intelligence grid via AG Grid. 6 chains x 9 metrics (liquidity, spread, gas, bridge fee, slippage, latency, privacy, MEV, ETA). Live color-coded cells, column visibility toggling, auto-refresh every 30s, WebSocket push updates. Data from backend `/api/market/chains`.
 
-**File:** `frontend/src/components/market-matrix/MarketMatrix.tsx` (394 lines)
+**File:** `frontend/src/components/market-matrix/MarketMatrix.tsx`
 
 ### 2. Route Visualizer
 Animated route graph showing every fragment's journey: wallet -> fragmentation -> bridge -> DEX -> liquidity pool -> settlement. Each step shows cost, latency, privacy score, confidence, and live status. Data from backend `/api/routes/simulate`.
 
-**File:** `frontend/src/components/route-visualizer/RouteVisualizer.tsx` (204 lines)
+**File:** `frontend/src/components/route-visualizer/RouteVisualizer.tsx`
 
 ### 3. AI Solver
 Recommends optimal paths with confidence scoring, alternatives, bridge health metrics, and MEV forecasts. Explains why each route was chosen. Data from backend `/api/routes/recommend`.
 
-**File:** `frontend/src/components/ai-solver/AiSolver.tsx` (115 lines)
+**File:** `frontend/src/components/ai-solver/AiSolver.tsx`
 
 ### 4. Execution Blotter
-Full order management form: source/destination asset & chain, amount, privacy toggle, fragmentation mode, slippage tolerance, bridge preference, MEV guard. Three-button workflow: Simulate -> Optimize -> Execute. All actions call real backend APIs with loading states.
+Full order management form: source/destination asset & chain, amount, privacy toggle, fragmentation mode, slippage tolerance, bridge preference, MEV guard. Three-button workflow: Simulate -> Optimize -> Execute. All actions call live backend APIs.
 
-**File:** `frontend/src/components/execution-blotter/ExecutionBlotter.tsx` (242 lines)
+**File:** `frontend/src/components/execution-blotter/ExecutionBlotter.tsx`
 
 ### 5. Liquidity Heatmap
 Cross-chain depth visualization via Recharts bar charts + pool grid view. Depth chart with colored bars per chain. Pool grid shows token-level depth, APY, and utilization. Data from backend `/api/market/liquidity`.
 
-**File:** `frontend/src/components/liquidity-heatmap/LiquidityHeatmap.tsx` (187 lines)
+**File:** `frontend/src/components/liquidity-heatmap/LiquidityHeatmap.tsx`
 
 ### 6. Settlement Inspector
 On-chain proof inspection. Enter a tx hash or route ID to view: transaction hash, route ID, proof hash, settlement state, fees, relayer, confirmations. Data from backend `/api/settlement/proofs` and `/api/settlement/verify/:txHash`.
 
-**File:** `frontend/src/components/settlement-inspector/SettlementInspector.tsx` (134 lines)
+**File:** `frontend/src/components/settlement-inspector/SettlementInspector.tsx`
 
 ### 7. Command Terminal
-xterm.js-inspired power-user terminal. Commands:
-```
-route 50000 usdc arb eth private
-simulate 100000 usdt base sol
-inspect 0x7f3c...8a
-watch mev
-compare usdc eth arb
-status, help, clear
-```
-ANSI color support, command history (arrow up/down), 500-line scrollback buffer.
+xterm.js-inspired power-user terminal with route/simulate/inspect/watch/compare/status commands and history support.
 
-**File:** `frontend/src/components/command-terminal/CommandTerminal.tsx` (195 lines)
+**File:** `frontend/src/components/command-terminal/CommandTerminal.tsx`
 
 ### 8. Alerts Feed
 Live operational feed. Filter by type: bridge outage, route success, MEV event, liquidity spike, relayer failure, gas spike. Severity indicators (info/warning/critical). Data from backend `/api/alerts`.
 
-**File:** `frontend/src/components/alerts-feed/AlertsFeed.tsx` (125 lines)
+**File:** `frontend/src/components/alerts-feed/AlertsFeed.tsx`
 
-### 9. Watchlist
+### 9. Recent Executions
+Execution tape for the operations desk. Shows route ID, asset, amount, route pair, timestamp, and status with success/failure indicators. Polls live backend execution orders.
+
+**File:** `frontend/src/components/recent-executions/RecentExecutions.tsx`
+
+### 10. Watchlist
 Compact portfolio tracker. 7 assets (USDC, ETH, BTC, SOL, AVAX, ARB, BNB) with price, 24h change %, PnL. Color-coded gain/loss indicators. Chain attribution per asset.
 
-**File:** `frontend/src/components/watchlist/Watchlist.tsx` (78 lines)
+**File:** `frontend/src/components/watchlist/Watchlist.tsx`
 
 ---
 
@@ -234,7 +230,12 @@ cd frontend && npm run dev
 
 Open **[http://localhost:3000](http://localhost:3000)**
 
-All frontend `/api/*` requests are proxied to the backend server at `http://localhost:3001` via Next.js rewrites (configured in `next.config.js`). The backend runs with graceful fallbacks -- if PostgreSQL or Redis are unavailable, it returns sensible default data.
+All frontend `/api/*` requests are proxied to the backend server at `http://localhost:3001` via Next.js rewrites (configured in `next.config.js`).
+
+Backend now runs in strict live-data mode:
+- PostgreSQL and Redis are required at startup
+- WebSocket emits only real published events (no synthetic generator)
+- Market, routes, execution, alerts, and settlement routes return live DB/service data only
 
 ---
 
@@ -246,7 +247,7 @@ All frontend `/api/*` requests are proxied to the backend server at `http://loca
 | [Architecture](docs/architecture.md) | System design, data flow, component interaction, state management |
 | [Live Data Plan](docs/architecture-live.md) | Migration plan: replace mock data with real blockchain/API data |
 | [API Reference](docs/api.md) | All API endpoints with request/response schemas |
-| [Smart Contracts](docs/contracts.md) | 8 Solidity contracts -- spec, functions, events, deployment |
+| [Smart Contracts](docs/contracts.md) | 9 Solidity contracts -- spec, functions, events, deployment |
 | [Deployment Guide](docs/deployment.md) | Local, Docker, K8s, Vercel, Coolify, Production |
 | [Data Flow](docs/data-flow.md) | End-to-end transaction flow, state management, WebSocket protocol |
 | [State Management](docs/state-management.md) | Zustand stores, store hierarchy, cross-store interactions |
@@ -263,92 +264,77 @@ All frontend `/api/*` requests are proxied to the backend server at `http://loca
 
 ```
 groute/
-├── frontend/                        # Next.js 14 SPA
+├── frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── page.tsx             # Main terminal layout (8 tabs + sidebar)
-│   │   │   ├── layout.tsx           # Root layout
-│   │   │   ├── globals.css          # Tailwind + AG Grid + Recharts themes
-│   │   │   ├── market-matrix/       # Market Matrix page
-│   │   │   ├── execution-desk/      # Execution Desk page
-      │   │   │   ├── solver-marketplace/ # Solver Marketplace page
-      │   │   │   ├── route-analysis/      # Route Analysis page
-│   │   │   ├── liquidity-intelligence/ # Liquidity Intelligence page
-│   │   │   ├── settlement/          # Settlement page
-│   │   │   ├── command-terminal/    # Command Terminal page
-│   │   │   ├── alerts/              # Alerts page
-│   │   │   └── watchlist/           # Watchlist page
+│   │   │   ├── page.tsx                    # 3-row institutional workspace layout
+│   │   │   ├── layout.tsx
+│   │   │   ├── market-matrix/
+│   │   │   ├── execution-desk/
+│   │   │   ├── solver-marketplace/
+│   │   │   ├── route-analysis/
+│   │   │   ├── liquidity-intelligence/
+│   │   │   ├── settlement/
+│   │   │   ├── command-terminal/
+│   │   │   ├── alerts/
+│   │   │   └── watchlist/
 │   │   ├── components/
-│   │   │   ├── market-matrix/       # AG Grid chain intelligence
-│   │   │   ├── route-visualizer/    # Fragment flow visualization
-│   │   │   ├── ai-solver/           # AI route recommendation panel
-│   │   │   ├── execution-blotter/   # Order entry form
-│   │   │   ├── liquidity-heatmap/   # Recharts depth bars + pool grid
-│   │   │   ├── settlement-inspector/# Proof verification UI
-│   │   │   ├── command-terminal/    # xterm.js terminal emulator
-│   │   │   ├── alerts-feed/         # Real-time alert stream
-│   │   │   ├── watchlist/           # Portfolio tracker
-│   │   │   ├── layout/             # Shell, Sidebar, Header, StatusStrip
-│   │   │   └── common/             # ErrorBoundary
-│   │   ├── stores/                  # Zustand state management (6 stores)
-│   │   ├── hooks/                   # useWebSocket hook
-│   │   ├── lib/                     # api-client, constants, utils
-│   │   └── types/                   # TypeScript interfaces
-│   ├── tailwind.config.ts
-│   ├── next.config.js               # API rewrites proxying to backend
-│   └── package.json
-│
-├── backend/                         # Fastify API server
+│   │   │   ├── market-matrix/
+│   │   │   ├── route-visualizer/
+│   │   │   ├── ai-solver/
+│   │   │   ├── execution-blotter/
+│   │   │   ├── liquidity-heatmap/
+│   │   │   ├── settlement-inspector/
+│   │   │   ├── command-terminal/
+│   │   │   ├── alerts-feed/
+│   │   │   ├── recent-executions/
+│   │   │   ├── watchlist/
+│   │   │   └── layout/
+│   │   ├── stores/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   └── types/
+│   └── next.config.js
+├── backend/
 │   ├── src/
-│   │   ├── index.ts                 # Server entry with graceful DB/Redis fallback
-│   │   ├── config.ts                # Env-based configuration
+│   │   ├── index.ts                    # strict live-data boot (DB + Redis required)
 │   │   ├── routes/
-│   │   │   ├── market.ts            # /api/market/* (chains, liquidity, ticker)
-│   │   │   ├── execution.ts         # /api/execution/* (simulate, optimize, execute)
-│   │   │   ├── settlement.ts        # /api/settlement/* (proofs, verify, inspect)
-│   │   │   ├── routes.ts            # /api/routes/* (list, recommend, simulate)
-│   │   │   └── alerts.ts            # /api/alerts/* (list, unread, read)
-│   │   │   │   └── solver.ts            # /api/solver/* (auctions, bids, leaderboard)
-│   │   ├── services/                # Service layer
-│   │   │   ├── rpc-provider.ts      # ethers.js RPC provider management
-│   │   │   ├── price-feed.ts        # CoinGecko price integration
-│   │   │   ├── defillama.ts         # DeFiLlama TVL/prices
-│   │   │   └── index.ts
+│   │   │   ├── market.ts
+│   │   │   ├── execution.ts
+│   │   │   ├── settlement.ts
+│   │   │   ├── routes.ts
+│   │   │   ├── alerts.ts
+│   │   │   └── solver.ts
+│   │   ├── services/
+│   │   │   ├── rpc-provider.ts
+│   │   │   ├── price-feed.ts
+│   │   │   └── defillama.ts
 │   │   ├── websocket/
-│   │   │   └── handler.ts           # WS handler with Redis Pub/Sub integration
+│   │   │   └── handler.ts              # real event stream only
 │   │   └── middleware/
-│   │       └── error.ts             # Error handling (AppError, ZodError, etc.)
-│   ├── prisma/
-│   │   ├── schema.prisma            # 9 models: Chain, Route, Intent, IntentFragment,
-│   │   │                             #   Settlement, LiquidityPool, Alert, WatchlistItem, Relayer
-│   │   ├── seed.ts                  # Seed script for 6 chains
-│   │   └── config.ts
-│   └── package.json
-│
-├── contracts/                       # Solidity smart contracts
+│   └── prisma/schema.prisma
+├── contracts/
 │   ├── contracts/
-│   │   ├── IntentRouter.sol         # Cross-chain intent routing + fragmentation
-│   │   ├── FragmentVault.sol        # Fragment custody + settlement
-│   │   ├── RouteRegistry.sol        # Route discovery + performance tracking
-│   │   ├── SettlementVerifier.sol   # Proof verification + dispute resolution
-│   │   ├── PrivacyScoreOracle.sol   # Chain privacy scoring
-│   │   ├── TreasuryFeeCollector.sol # Tiered fee collection + distribution
-│   │   ├── Governance.sol           # On-chain proposal + voting
-│   │   └── RelayerRegistry.sol      # Relayer staking + heartbeats + slashing
-│   ├── test/                        # Hardhat tests
-│   ├── scripts/                     # Deployment scripts
+│   │   ├── IntentRouter.sol
+│   │   ├── FragmentVault.sol
+│   │   ├── RouteRegistry.sol
+│   │   ├── SettlementVerifier.sol
+│   │   ├── PrivacyScoreOracle.sol
+│   │   ├── TreasuryFeeCollector.sol
+│   │   ├── Governance.sol
+│   │   ├── RelayerRegistry.sol
+│   │   └── SolverAuction.sol
 │   └── hardhat.config.ts
-│
 ├── docker/
-│   ├── docker-compose.yml           # PostgreSQL + Redis + Backend + Frontend
+│   ├── docker-compose.yml
 │   ├── Dockerfile.backend
 │   └── Dockerfile.frontend
 ├── k8s/
-│   └── deployment.yaml              # Kubernetes manifests
-├── docs/                            # Documentation
-├── coolify.json                     # Coolify multi-service config
-├── vercel.json                      # Vercel deployment config
-├── .env.example                     # Environment variables template
+│   └── deployment.yaml
+├── docs/
+├── coolify.json
+├── vercel.json
+├── .env.example
 ├── SECURITY.md
 ├── CONTRIBUTING.md
 └── README.md
